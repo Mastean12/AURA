@@ -8,7 +8,6 @@ PRIMARY_MODEL = "gemini-2.5-flash"
 FALLBACK_MODEL = "gemini-2.0-flash"
 MAX_RETRIES = 3
 BASE_DELAY = 2.0
-REQUEST_TIMEOUT = 30
 
 RETRYABLE_CODES = {429, 500, 502, 503, 504}
 
@@ -34,7 +33,12 @@ def _format_prompt_text(prompt: str | list[dict]) -> str:
 def _is_retryable(error: Exception) -> bool:
     msg = str(error).lower()
     codes = [str(c) for c in RETRYABLE_CODES]
-    return any(c in msg for c in codes) or any(kw in msg for kw in ["unavailable", "timeout", "overloaded", "rate_limit", "too many"])
+    return any(c in msg for c in codes) or any(kw in msg for kw in ["unavailable", "timeout", "overloaded", "too many"])
+
+
+def _is_quota_exhausted(error: Exception) -> bool:
+    msg = str(error).lower()
+    return "quota exceeded" in msg or "resource_exhausted" in msg
 
 
 def generate_gemini(prompt: str | list[dict], api_key: str, model: str | None = None) -> str:
@@ -61,6 +65,11 @@ def generate_with_retry(prompt: str | list[dict], api_key: str) -> str:
         except Exception as e:
             logger.warning("Gemini attempt %d/%d failed (model=%s): %s", attempt, MAX_RETRIES, PRIMARY_MODEL, e)
             last_error = e
+
+            if _is_quota_exhausted(e):
+                logger.warning("Quota exhausted — skipping remaining primary retries")
+                break
+
             if attempt < MAX_RETRIES and _is_retryable(e):
                 retry_count += 1
                 delay = BASE_DELAY * (2 ** (attempt - 1))
