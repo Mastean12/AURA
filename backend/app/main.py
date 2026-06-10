@@ -13,6 +13,7 @@ from app.api.chat import router as chat_router
 from app.api.summary import router as summary_router
 from app.api.analytics import router as analytics_router
 from app.api.reports import router as reports_router
+from app.api.predictive import router as predictive_router
 
 settings = get_settings()
 
@@ -73,6 +74,7 @@ app.include_router(chat_router, prefix="/api/v1")
 app.include_router(summary_router, prefix="/api/v1")
 app.include_router(analytics_router, prefix="/api/v1")
 app.include_router(reports_router, prefix="/api/v1")
+app.include_router(predictive_router, prefix="/api/v1")
 
 
 @app.get("/")

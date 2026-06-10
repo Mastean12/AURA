@@ -160,3 +160,95 @@ class ChartInsightResponse(BaseModel):
     chart_type: str
     column: str
     insight: str
+
+
+# --- Phase 2 Schemas ---
+
+class ForecastRequest(BaseModel):
+    doc_id: int
+    column: str
+    periods: int = 30
+
+
+class ForecastPoint(BaseModel):
+    date: str
+    value: float
+    lower_bound: float
+    upper_bound: float
+
+
+class ForecastResponse(BaseModel):
+    doc_id: int
+    column: str
+    historical: list[ForecastPoint]
+    forecast: list[ForecastPoint]
+    trend_direction: str
+    trend_strength: float
+    confidence_avg: float
+    explanation: str
+
+
+class AnomalyRequest(BaseModel):
+    doc_id: int
+    column: str
+    severity: str | None = None
+
+
+class AnomalyItem(BaseModel):
+    index: int
+    value: float
+    expected: float
+    deviation: float
+    severity: str
+    type: str
+    explanation: str
+
+
+class AnomalyResponse(BaseModel):
+    doc_id: int
+    column: str
+    anomalies: list[AnomalyItem]
+    anomaly_count: int
+    high_severity_count: int
+    summary: str
+
+
+class RiskScoreRequest(BaseModel):
+    doc_id: int
+
+
+class RiskCategory(BaseModel):
+    name: str
+    score: int
+    level: str
+    explanation: str
+    mitigations: list[str]
+
+
+class RiskScoreResponse(BaseModel):
+    doc_id: int
+    overall_score: int
+    overall_level: str
+    overall_explanation: str
+    categories: list[RiskCategory]
+
+
+class RecommendationRequest(BaseModel):
+    doc_id: int
+
+
+class RecommendationItem(BaseModel):
+    title: str
+    description: str
+    category: str
+    impact: str
+    urgency: str
+    confidence: float
+    source: str
+
+
+class RecommendationResponse(BaseModel):
+    doc_id: int
+    recommendations: list[RecommendationItem]
+    total_count: int
+    high_priority_count: int
