@@ -89,6 +89,44 @@ class ChartsResponse(BaseModel):
     bar: dict
     pie: dict
     line: dict
+    area: dict | None = None
+    histogram: dict | None = None
+    distribution: dict | None = None
+    correlation: dict | None = None
+
+
+class InsightsResponse(BaseModel):
+    doc_id: int
+    executive_summary: str
+    key_findings: list[str]
+    risks: list[str]
+    opportunities: list[str]
+    recommendations: list[str]
+    confidence_score: float
+
+
+class HealthResponse(BaseModel):
+    doc_id: int
+    completeness: int
+    quality: int
+    consistency: int
+    missing_data: int
+    overall: int
+    color: str
+    label: str
+    explanation: str
+
+
+class AnalyticsChatRequest(BaseModel):
+    doc_id: int
+    question: str
+    session_id: str = "default"
+
+
+class AnalyticsChatResponse(BaseModel):
+    answer: str
+    confidence: float
+    session_id: str
 
 
 class UploadResponse(BaseModel):
@@ -96,3 +134,29 @@ class UploadResponse(BaseModel):
     size: int
     upload_timestamp: datetime
     content_preview: str | None = None
+
+
+# --- Phase 1 New Schemas ---
+
+class ExecutiveSummaryResponse(BaseModel):
+    doc_id: int
+    summary: str
+    confidence: float
+
+
+class KPIResponse(BaseModel):
+    doc_id: int
+    kpis: list[dict]
+
+
+class ChartInsightRequest(BaseModel):
+    doc_id: int
+    chart_type: str
+    column: str
+
+
+class ChartInsightResponse(BaseModel):
+    doc_id: int
+    chart_type: str
+    column: str
+    insight: str

@@ -1,23 +1,21 @@
+import logging
 from functools import lru_cache
-
-from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+import logging
 
 from app.config import get_settings
+from app.services.ai_service import generate_response_async as ai_generate
 
-settings = get_settings()
+logger = logging.getLogger(__name__)
 
 
-@lru_cache()
-def get_llm() -> ChatOpenAI:
-    return ChatOpenAI(
-        api_key=settings.openai_api_key,
-        model=settings.openai_model,
-        temperature=0.7,
-    )
+async def generate(prompt: str | list[dict]) -> str:
+    return await ai_generate(prompt)
 
 
 @lru_cache()
-def get_embeddings() -> OpenAIEmbeddings:
+def get_embeddings():
+    from langchain_openai import OpenAIEmbeddings
+    settings = get_settings()
     return OpenAIEmbeddings(
         api_key=settings.openai_api_key,
         model="text-embedding-3-small",

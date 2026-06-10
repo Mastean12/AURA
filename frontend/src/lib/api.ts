@@ -7,7 +7,13 @@ import type {
   DocumentResponse,
   AnalyticsResponse,
   ChartsResponse,
+  InsightsResponse,
+  HealthResponse,
+  AnalyticsChatResponse,
   SummaryResponse,
+  ExecutiveSummaryResponse,
+  KPIResponse,
+  ChartInsightResponse,
 } from "@/types";
 
 function log(level: "info" | "error", msg: string, data?: unknown) {
@@ -142,6 +148,54 @@ export async function getCharts(
   return res.json();
 }
 
+export async function getAllCharts(doc_id: number): Promise<ChartsResponse> {
+  const url = `${API_BASE}/analytics/charts/all`;
+  log("info", "POST", url);
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ doc_id }),
+  });
+  return res.json();
+}
+
+export async function getInsights(doc_id: number): Promise<InsightsResponse> {
+  const url = `${API_BASE}/analytics/insights`;
+  log("info", "POST", url);
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ doc_id }),
+  });
+  return res.json();
+}
+
+export async function getDatasetHealth(doc_id: number): Promise<HealthResponse> {
+  const url = `${API_BASE}/analytics/health`;
+  log("info", "POST", url);
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ doc_id }),
+  });
+  return res.json();
+}
+
+export async function analyticsChat(
+  doc_id: number,
+  question: string,
+  session_id: string
+): Promise<AnalyticsChatResponse> {
+  const url = `${API_BASE}/analytics/chat`;
+  log("info", "POST", url);
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ doc_id, question, session_id }),
+  });
+  return res.json();
+}
+
 export async function getSummary(
   doc_id: number,
   summary_type: number
@@ -174,4 +228,39 @@ export async function health(): Promise<{ status: string }> {
   const data = await res.json();
   log("info", "Response", { status: res.status, data });
   return data;
+}
+
+// --- Phase 1 New API Calls ---
+
+export async function getExecutiveSummary(doc_id: number): Promise<ExecutiveSummaryResponse> {
+  const url = `${API_BASE}/analytics/executive-summary`;
+  log("info", "POST", url);
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ doc_id }),
+  });
+  return res.json();
+}
+
+export async function getKPIs(doc_id: number): Promise<KPIResponse> {
+  const url = `${API_BASE}/analytics/kpis?doc_id=${doc_id}`;
+  log("info", "GET", url);
+  const res = await fetch(url);
+  return res.json();
+}
+
+export async function getChartInsight(
+  doc_id: number,
+  chart_type: string,
+  column: string
+): Promise<ChartInsightResponse> {
+  const url = `${API_BASE}/analytics/chart-insight`;
+  log("info", "POST", url);
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ doc_id, chart_type, column }),
+  });
+  return res.json();
 }

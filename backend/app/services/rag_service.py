@@ -1,24 +1,26 @@
 import asyncio
 import uuid
 
-from langchain_core.prompts import ChatPromptTemplate
-
-from app.services.llm import get_llm
+from app.services.ai_service import generate_response_async, get_ai_provider
 from app.services.embedding_service import search_vectorstore
 from app.services.session_service import store_query
 from app.models.schemas import QueryResponse
 
 CHROMA_TIMEOUT = 4
 
-RAG_PROMPT = ChatPromptTemplate.from_messages([
-    (
-        "system",
-        "You are AURA, an AI assistant. Answer the question using only the context provided. "
-        "If the context does not contain enough information, say so. "
-        "Cite the source filename when referencing specific information.\n\nContext:\n{context}",
-    ),
-    ("human", "{question}"),
-])
+
+def _build_rag_prompt(context: str, question: str) -> list[dict]:
+    return [
+        {
+            "role": "system",
+            "content": (
+                "You are AURA, an AI assistant. Answer the question using only the context provided. "
+                "If the context does not contain enough information, say so. "
+                f"Cite the source filename when referencing specific information.\n\nContext:\n{context}"
+            ),
+        },
+        {"role": "user", "content": question},
+    ]
 
 
 def _compute_confidence(results: list[dict]) -> float:
@@ -74,33 +76,18 @@ async def answer_question(
             session_id=session_id,
         )
     else:
-        try:
-            llm = get_llm()
-        except Exception as e:
-            response = QueryResponse(
-                answer=f"LLM unavailable: {e}",
-                sources=[],
-                confidence=0.0,
-                session_id=session_id,
-            )
-            await store_query(
-                session_id=session_id,
-                user_query=question,
-                ai_response=response.answer,
-                sources=response.sources,
-                confidence=response.confidence,
-            )
-            return response
-
         context = _format_context(results)
         sources = _extract_sources(results)
         confidence = _compute_confidence(results)
 
-        prompt = RAG_PROMPT.format_messages(context=context, question=question)
-        llm_response = await asyncio.to_thread(llm.invoke, prompt)
+        try:
+            prompt = _build_rag_prompt(context, question)
+            answer = await generate_response_async(prompt)
+        except Exception as e:
+            answer = f"AI service unavailable: {e}"
 
         response = QueryResponse(
-            answer=llm_response.content,
+            answer=answer,
             sources=sources,
             confidence=confidence,
             session_id=session_id,

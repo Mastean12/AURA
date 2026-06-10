@@ -13,8 +13,13 @@ class Settings(BaseSettings):
     chroma_port: int = 8000
     chroma_collection: str = "aura_documents"
 
+    ai_provider: str = "gemini"
+
     openai_api_key: str = ""
     openai_model: str = "gpt-4o"
+
+    gemini_api_key: str = ""
+    gemini_model: str = "gemini-2.5-flash"
 
     langchain_tracing_v2: bool = False
     langchain_api_key: str = ""

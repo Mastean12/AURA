@@ -1,10 +1,10 @@
-import asyncio
 import json
+import logging
 
-from langchain_core.prompts import ChatPromptTemplate
-
-from app.services.llm import get_llm
+from app.services.ai_service import generate_response_async
 from app.models.schemas import SummaryResponse
+
+logger = logging.getLogger(__name__)
 
 SUMMARY_TYPES = {
     1: "executive_summary",
@@ -14,65 +14,50 @@ SUMMARY_TYPES = {
 }
 
 PROMPTS = {
-    1: ChatPromptTemplate.from_messages([
-        (
-            "system",
-            "You are an AI analyst. Generate an executive summary of the following document. "
-            "Return ONLY valid JSON with no markdown or explanation:\n"
-            '{{\n'
-            '  "title": "concise title of the summary",\n'
-            '  "summary": "2-3 paragraph overview capturing the essence",\n'
-            '  "key_points": ["point 1", "point 2", "point 3"]\n'
-            "}}\n\nDocument:\n{document}",
-        ),
-        ("human", "Generate the executive summary."),
-    ]),
-    2: ChatPromptTemplate.from_messages([
-        (
-            "system",
-            "You are an AI analyst. Extract the key findings from the following document. "
-            "Return ONLY valid JSON with no markdown or explanation:\n"
-            '{{\n'
-            '  "findings": [\n'
-            '    {{"finding": "description of finding 1", "significance": "high"}},\n'
-            '    {{"finding": "description of finding 2", "significance": "medium"}}\n'
-            "  ]\n"
-            "}}\n\nDocument:\n{document}",
-        ),
-        ("human", "Extract the key findings."),
-    ]),
-    3: ChatPromptTemplate.from_messages([
-        (
-            "system",
-            "You are an AI analyst. Generate actionable recommendations based on the following document. "
-            "Return ONLY valid JSON with no markdown or explanation:\n"
-            '{{\n'
-            '  "recommendations": [\n'
-            '    {{"recommendation": "action item 1", "priority": "high", "impact": "expected outcome"}},\n'
-            '    {{"recommendation": "action item 2", "priority": "medium", "impact": "expected outcome"}}\n'
-            "  ]\n"
-            "}}\n\nDocument:\n{document}",
-        ),
-        ("human", "Generate recommendations."),
-    ]),
-    4: ChatPromptTemplate.from_messages([
-        (
-            "system",
-            "You are an AI analyst. Identify risks and mitigation strategies from the following document. "
-            "Return ONLY valid JSON with no markdown or explanation:\n"
-            '{{\n'
-            '  "risks": [\n'
-            '    {{"risk": "description of risk 1", "severity": "high", "mitigation": "how to address"}},\n'
-            '    {{"risk": "description of risk 2", "severity": "medium", "mitigation": "how to address"}}\n'
-            "  ]\n"
-            "}}\n\nDocument:\n{document}",
-        ),
-        ("human", "Identify risks."),
-    ]),
+    1: (
+        "You are an AI analyst. Generate an executive summary of the following document. "
+        "Return ONLY valid JSON with no markdown or explanation:\n"
+        '{\n'
+        '  "title": "concise title of the summary",\n'
+        '  "summary": "2-3 paragraph overview capturing the essence",\n'
+        '  "key_points": ["point 1", "point 2", "point 3"]\n'
+        "}\n\nDocument:\n{document}"
+    ),
+    2: (
+        "You are an AI analyst. Extract the key findings from the following document. "
+        "Return ONLY valid JSON with no markdown or explanation:\n"
+        '{\n'
+        '  "findings": [\n'
+        '    {"finding": "description of finding 1", "significance": "high"},\n'
+        '    {"finding": "description of finding 2", "significance": "medium"}\n'
+        "  ]\n"
+        "}\n\nDocument:\n{document}"
+    ),
+    3: (
+        "You are an AI analyst. Generate actionable recommendations based on the following document. "
+        "Return ONLY valid JSON with no markdown or explanation:\n"
+        '{\n'
+        '  "recommendations": [\n'
+        '    {"recommendation": "action item 1", "priority": "high", "impact": "expected outcome"},\n'
+        '    {"recommendation": "action item 2", "priority": "medium", "impact": "expected outcome"}\n'
+        "  ]\n"
+        "}\n\nDocument:\n{document}"
+    ),
+    4: (
+        "You are an AI analyst. Identify risks and mitigation strategies from the following document. "
+        "Return ONLY valid JSON with no markdown or explanation:\n"
+        '{\n'
+        '  "risks": [\n'
+        '    {"risk": "description of risk 1", "severity": "high", "mitigation": "how to address"},\n'
+        '    {"risk": "description of risk 2", "severity": "medium", "mitigation": "how to address"}\n'
+        "  ]\n"
+        "}\n\nDocument:\n{document}"
+    ),
 }
 
 
 async def summarize_document(doc_id: int, summary_type: int = 1) -> SummaryResponse:
+    doc = None
     try:
         from app.database.database import get_session_factory
         from app.models.document import Document
@@ -82,7 +67,7 @@ async def summarize_document(doc_id: int, summary_type: int = 1) -> SummaryRespo
             result = await db.execute(select(Document).where(Document.id == doc_id))
             doc = result.scalar_one_or_none()
     except Exception:
-        doc = None
+        pass
 
     if not doc:
         return SummaryResponse(
@@ -91,23 +76,21 @@ async def summarize_document(doc_id: int, summary_type: int = 1) -> SummaryRespo
             doc_id=doc_id,
         )
 
+    type_name = SUMMARY_TYPES.get(summary_type, "executive_summary")
+    prompt_template = PROMPTS.get(summary_type, PROMPTS[1])
+    truncated = doc.content[:10000]
+    prompt = prompt_template.format(document=truncated)
+
     try:
-        llm = get_llm()
+        raw = await generate_response_async(prompt)
     except Exception as e:
         return SummaryResponse(
-            summary_type=SUMMARY_TYPES.get(summary_type, "unknown"),
-            content=[{"error": f"LLM unavailable: {e}"}],
+            summary_type=type_name,
+            content=[{"error": f"AI service unavailable: {e}"}],
             doc_id=doc_id,
         )
 
-    type_name = SUMMARY_TYPES.get(summary_type, "executive_summary")
-    prompt = PROMPTS.get(summary_type, PROMPTS[1])
-
-    truncated = doc.content[:10000]
-    messages = prompt.format_messages(document=truncated)
-    response = await asyncio.to_thread(llm.invoke, messages)
-    raw = response.content.strip()
-
+    raw = raw.strip()
     raw = raw.removeprefix("```json").removeprefix("```").removesuffix("```").strip()
 
     try:
