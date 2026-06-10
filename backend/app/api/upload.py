@@ -7,8 +7,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
 from app.database.database import get_db
-from app.models.schemas import DocumentCreate, DocumentResponse, UploadResponse
-from app.services.document_service import create_document, list_documents, get_document, delete_document
+from app.models.schemas import DocumentCreate, DocumentResponse, UploadResponse, BulkDeleteRequest
+from app.services.document_service import (
+    create_document, list_documents, get_document, delete_document,
+    bulk_delete_documents, classify_file_type,
+)
 from app.services.document_service import store_chunks as store_chunks_db
 from app.services.document_parser import allowed_file, extract_text, save_upload
 from app.services.chunking_service import chunk_text
@@ -43,6 +46,12 @@ async def delete(doc_id: int, db: AsyncSession = Depends(get_db)):
     return {"detail": "Document deleted"}
 
 
+@router.post("/documents/batch-delete")
+async def batch_delete(payload: BulkDeleteRequest, db: AsyncSession = Depends(get_db)):
+    deleted = await bulk_delete_documents(db, payload.doc_ids)
+    return {"detail": f"{deleted} document(s) deleted", "deleted_count": deleted}
+
+
 @router.post("/upload/", response_model=UploadResponse)
 async def upload_file(file: UploadFile = File(...), db: AsyncSession = Depends(get_db)):
     logger.info("Upload request received: filename=%s", file.filename)
@@ -60,7 +69,8 @@ async def upload_file(file: UploadFile = File(...), db: AsyncSession = Depends(g
 
     content_bytes = await file.read()
     file_size = len(content_bytes)
-    logger.info("File read: filename=%s size=%d bytes", file.filename, file_size)
+    file_type = classify_file_type(file.filename)
+    logger.info("File read: filename=%s type=%s size=%d bytes", file.filename, file_type, file_size)
 
     ts = datetime.now(timezone.utc).isoformat()
     disk_path = save_upload(content_bytes, file.filename, settings.upload_dir)
@@ -80,6 +90,9 @@ async def upload_file(file: UploadFile = File(...), db: AsyncSession = Depends(g
         )
         doc = await create_document(db, payload)
         doc_id = doc.id
+        if file_size:
+            doc.file_size = file_size
+            await db.commit()
     except Exception:
         pass
 
@@ -109,8 +122,8 @@ async def upload_file(file: UploadFile = File(...), db: AsyncSession = Depends(g
             pass
 
     logger.info(
-        "Upload complete: filename=%s size=%d parsed=%d chars",
-        file.filename, file_size, len(parsed_text),
+        "Upload complete: filename=%s type=%s size=%d parsed=%d chars",
+        file.filename, file_type, file_size, len(parsed_text),
     )
 
     return UploadResponse(

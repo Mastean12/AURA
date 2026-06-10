@@ -7,8 +7,24 @@ from app.models.chunk import Chunk
 from app.models.schemas import DocumentCreate
 
 
+def classify_file_type(filename: str) -> str:
+    ext = filename.lower().rsplit(".", 1)[-1] if "." in filename else ""
+    if ext == "pdf":
+        return "PDF"
+    elif ext in ("doc", "docx"):
+        return "Word"
+    elif ext in ("xls", "xlsx", "csv"):
+        return "Excel"
+    return "Other"
+
+
 async def create_document(db: AsyncSession, payload: DocumentCreate) -> Document:
-    doc = Document(title=payload.title, content=payload.content, source=payload.source)
+    doc = Document(
+        title=payload.title,
+        content=payload.content,
+        source=payload.source,
+        file_type=classify_file_type(payload.title),
+    )
     db.add(doc)
     await db.commit()
     await db.refresh(doc)
@@ -33,6 +49,17 @@ async def delete_document(db: AsyncSession, doc_id: int) -> None:
         raise HTTPException(status_code=404, detail="Document not found")
     await db.delete(doc)
     await db.commit()
+
+
+async def bulk_delete_documents(db: AsyncSession, doc_ids: list[int]) -> int:
+    deleted = 0
+    for did in doc_ids:
+        doc = await db.get(Document, did)
+        if doc:
+            await db.delete(doc)
+            deleted += 1
+    await db.commit()
+    return deleted
 
 
 async def store_chunks(db: AsyncSession, doc_id: int, chunks: list[dict]) -> None:

@@ -32,6 +32,8 @@ export interface DocumentResponse {
   title: string;
   content: string;
   source: string | null;
+  file_type: string | null;
+  file_size: number | null;
   created_at: string;
   updated_at: string;
 }
