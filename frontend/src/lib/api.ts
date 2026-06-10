@@ -18,6 +18,11 @@ import type {
   AnomalyResponse,
   RiskScoreResponse,
   RecommendationResponse,
+  IndustryDashboardResponse,
+  MultiDocumentResponse,
+  ComparisonResponse,
+  AutonomousAnalysisResponse,
+  ExecutiveBriefingResponse,
 } from "@/types";
 
 function log(level: "info" | "error", msg: string, data?: unknown) {
@@ -323,6 +328,64 @@ export async function getRecommendations(
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ doc_id }),
+  });
+  return res.json();
+}
+
+// --- Phase 3 API Calls ---
+
+export async function getIndustryDashboard(doc_id: number): Promise<IndustryDashboardResponse> {
+  const url = `${API_BASE}/analytics/industry-dashboard?doc_id=${doc_id}`;
+  log("info", "GET", url);
+  const res = await fetch(url);
+  return res.json();
+}
+
+export async function getMultiDocumentAnalysis(doc_ids: number[]): Promise<MultiDocumentResponse> {
+  const url = `${API_BASE}/analytics/multi-document`;
+  log("info", "POST", url);
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ doc_ids }),
+  });
+  return res.json();
+}
+
+export async function getComparison(
+  doc_id_a: number,
+  doc_id_b: number,
+  label_a: string = "Document A",
+  label_b: string = "Document B"
+): Promise<ComparisonResponse> {
+  const url = `${API_BASE}/analytics/compare`;
+  log("info", "POST", url);
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ doc_id_a, doc_id_b, label_a, label_b }),
+  });
+  return res.json();
+}
+
+export async function getAutonomousAnalysis(doc_ids: number[]): Promise<AutonomousAnalysisResponse> {
+  const url = `${API_BASE}/analytics/autonomous-analysis`;
+  log("info", "POST", url);
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ doc_ids }),
+  });
+  return res.json();
+}
+
+export async function getExecutiveBriefing(doc_id: number, company_name: string = ""): Promise<ExecutiveBriefingResponse> {
+  const url = `${API_BASE}/reports/executive-briefing`;
+  log("info", "POST", url);
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ doc_id, company_name }),
   });
   return res.json();
 }

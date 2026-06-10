@@ -10,6 +10,7 @@ import {
   FileText,
   Sparkles,
   TrendingUp,
+  Building2,
 } from "lucide-react";
 import HealthCheck from "@/components/HealthCheck";
 
@@ -19,6 +20,7 @@ const navItems = [
   { href: "/chat", label: "Chat", icon: MessageSquare },
   { href: "/analytics", label: "Analytics", icon: BarChart3 },
   { href: "/predictive", label: "Predictive", icon: TrendingUp },
+  { href: "/enterprise", label: "Enterprise", icon: Building2 },
   { href: "/reports", label: "Reports", icon: FileText },
 ];
 

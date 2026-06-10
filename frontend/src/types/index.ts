@@ -199,3 +199,60 @@ export interface RecommendationResponse {
   total_count: number;
   high_priority_count: number;
 }
+
+// --- Phase 3 Types ---
+
+export interface IndustryDashboardResponse {
+  doc_id: number;
+  detected_industry: string;
+  industry_kpis: { label: string; column: string; value: string; raw_value: number }[];
+  industry_summary: string;
+  recommendations: string[];
+  confidence: number;
+}
+
+export interface MultiDocumentResponse {
+  doc_count: number;
+  consolidated_summary: string;
+  themes: string[];
+  conflicts: string[];
+  cross_references: string[];
+  total_insights: string[];
+  confidence: number;
+}
+
+export interface ComparisonResponse {
+  similarities: string[];
+  differences: string[];
+  key_changes: string[];
+  recommended_actions: string[];
+  comparison_summary: string;
+  confidence: number;
+}
+
+// --- Phase 4 Types ---
+
+export interface AutonomousAnalysisResponse {
+  doc_id: number;
+  business_health: {
+    overall_score: number;
+    label: string;
+    completeness: number;
+    quality: number;
+  };
+  top_risks: { title: string; severity: string; impact: string; probability: string; mitigation: string }[];
+  top_opportunities: { title: string; estimated_impact: string; strategic_value: string; recommended_action: string }[];
+  forecasts: { metric: string; trend: string; confidence: number; horizon: string }[];
+  strategic_recommendations: { title: string; impact: string; urgency: string; confidence: number; expected_outcome: string }[];
+  overall_confidence: number;
+}
+
+export interface ExecutiveBriefingResponse {
+  summary: string;
+  business_health: string;
+  critical_risks: string[];
+  growth_opportunities: string[];
+  forecast_outlook: string;
+  recommended_actions: string[];
+  confidence: number;
+}
