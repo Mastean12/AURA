@@ -23,6 +23,7 @@ export interface QueryResponse {
 export interface UploadResponse {
   filename: string;
   size: number;
+  file_type: string;
   upload_timestamp: string;
   content_preview: string | null;
 }

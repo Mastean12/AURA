@@ -129,6 +129,7 @@ async def upload_file(file: UploadFile = File(...), db: AsyncSession = Depends(g
     return UploadResponse(
         filename=file.filename,
         size=file_size,
+        file_type=file_type,
         upload_timestamp=datetime.now(timezone.utc),
         content_preview=parsed_text[:200] if parsed_text else None,
     )

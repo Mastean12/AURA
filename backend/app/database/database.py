@@ -1,9 +1,13 @@
+import logging
 from functools import lru_cache
 
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
+from sqlalchemy import text
 from sqlalchemy.orm import DeclarativeBase
 
 from app.config import get_settings
+
+logger = logging.getLogger(__name__)
 
 
 class Base(DeclarativeBase):
@@ -30,7 +34,21 @@ async def get_db() -> AsyncSession:
             await session.close()
 
 
+async def _run_migrations(conn):
+    migrations = [
+        "ALTER TABLE documents ADD COLUMN IF NOT EXISTS file_type VARCHAR(20)",
+        "ALTER TABLE documents ADD COLUMN IF NOT EXISTS file_size INTEGER",
+    ]
+    for stmt in migrations:
+        try:
+            await conn.execute(text(stmt))
+            logger.info("Migration: %s", stmt[:60])
+        except Exception as e:
+            logger.warning("Migration skipped (%s): %s", stmt[:40], e)
+
+
 async def init_db():
     engine = get_engine()
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        await _run_migrations(conn)

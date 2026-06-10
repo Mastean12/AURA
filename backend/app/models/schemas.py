@@ -138,6 +138,7 @@ class AnalyticsChatResponse(BaseModel):
 class UploadResponse(BaseModel):
     filename: str
     size: int
+    file_type: str
     upload_timestamp: datetime
     content_preview: str | None = None
 
