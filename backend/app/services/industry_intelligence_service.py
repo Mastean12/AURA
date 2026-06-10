@@ -1,4 +1,5 @@
 import io
+import json
 import logging
 import re
 
@@ -130,7 +131,7 @@ async def generate_industry_dashboard(doc_id: int) -> dict:
     try:
         raw = generate_response(rec_prompt)
         raw = raw.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
-        recommendations = eval(raw) if raw.startswith("[") else []
+        recommendations = json.loads(raw) if raw.startswith("[") else []
     except Exception:
         recommendations = [f"Optimize {industry} KPIs for better performance.", "Identify growth opportunities in key metrics."]
 

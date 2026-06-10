@@ -1,5 +1,6 @@
 import logging
 import time
+import uuid
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
@@ -7,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
 from app.database.database import init_db
-from app.services.ai_service import generate_response, get_available_providers
+from app.services.ai_service import generate_response, get_available_providers, _gemini_generate
 from app.api.upload import router as documents_router
 from app.api.chat import router as chat_router
 from app.api.summary import router as summary_router
@@ -34,6 +35,10 @@ async def lifespan(app: FastAPI):
         await init_db()
     except Exception as e:
         logger.warning("Database init skipped: %s", e)
+    # Verify AI provider on startup
+    providers = get_available_providers()
+    active = providers.get("active", "unknown")
+    logger.info("AI provider: %s (key configured: %s)", active, providers.get(active, False))
     logger.info("Application startup complete")
     yield
     logger.info("Shutting down AURA application")
@@ -54,19 +59,21 @@ app.add_middleware(
 
 
 @app.middleware("http")
-async def timing_middleware(request: Request, call_next):
+async def observability_middleware(request: Request, call_next):
+    request_id = str(uuid.uuid4())[:8]
     route = request.url.path
-    logger.info("[REQUEST] %s %s", request.method, route)
     start = time.perf_counter()
+    logger.info("[%s] %s %s", request_id, request.method, route)
     try:
         response = await call_next(request)
         elapsed = int((time.perf_counter() - start) * 1000)
-        logger.info("[RESPONSE] %s %d - %dms", route, response.status_code, elapsed)
+        logger.info("[%s] %s %d - %dms", request_id, route, response.status_code, elapsed)
+        response.headers["X-Request-ID"] = request_id
         response.headers["X-Response-Time-Ms"] = str(elapsed)
         return response
     except Exception as e:
         elapsed = int((time.perf_counter() - start) * 1000)
-        logger.error("[RESPONSE] %s ERROR - %dms: %s", route, elapsed, e)
+        logger.error("[%s] %s ERROR - %dms: %s", request_id, route, elapsed, e)
         raise
 
 
@@ -91,6 +98,46 @@ async def root():
 @app.get("/health")
 async def health():
     return {"status": "ok", "service": settings.app_name}
+
+
+@app.get("/health/ai")
+async def ai_health():
+    providers = get_available_providers()
+    active = providers.get("active", "unknown")
+    key_ok = providers.get(active, False)
+
+    result = {
+        "status": "unhealthy",
+        "provider": active,
+        "model": "",
+        "key_configured": key_ok,
+        "latency_ms": None,
+        "last_success": None,
+        "error": None,
+    }
+
+    if not key_ok:
+        result["error"] = f"No API key configured for provider '{active}'"
+        return result
+
+    start = time.perf_counter()
+    try:
+        response = generate_response("Return only the word OK if you can read this.")
+        elapsed = int((time.perf_counter() - start) * 1000)
+        result["status"] = "healthy" if response.strip() == "OK" else "degraded"
+        result["latency_ms"] = elapsed
+        result["last_success"] = time.time()
+        if active == "gemini":
+            result["model"] = settings.gemini_model
+        elif active == "openai":
+            result["model"] = settings.openai_model
+    except Exception as e:
+        elapsed = int((time.perf_counter() - start) * 1000)
+        result["status"] = "unhealthy"
+        result["latency_ms"] = elapsed
+        result["error"] = str(e)
+
+    return result
 
 
 @app.get("/ping")
