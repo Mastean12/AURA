@@ -252,3 +252,80 @@ class RecommendationResponse(BaseModel):
     recommendations: list[RecommendationItem]
     total_count: int
     high_priority_count: int
+
+
+# --- Phase 3 Schemas ---
+
+class IndustryDashboardResponse(BaseModel):
+    doc_id: int
+    detected_industry: str
+    industry_kpis: list[dict]
+    industry_summary: str
+    recommendations: list[str]
+    confidence: float
+
+
+class MultiDocumentRequest(BaseModel):
+    doc_ids: list[int]
+
+
+class MultiDocumentResponse(BaseModel):
+    doc_count: int
+    consolidated_summary: str
+    themes: list[str]
+    conflicts: list[str]
+    cross_references: list[str]
+    total_insights: list[str]
+    confidence: float
+
+
+class ComparisonRequest(BaseModel):
+    doc_id_a: int
+    doc_id_b: int
+    label_a: str = "Document A"
+    label_b: str = "Document B"
+
+
+class ComparisonResponse(BaseModel):
+    similarities: list[str]
+    differences: list[str]
+    key_changes: list[str]
+    recommended_actions: list[str]
+    comparison_summary: str
+    confidence: float
+
+
+class BoardReportRequest(BaseModel):
+    doc_id: int
+    company_name: str = ""
+
+
+# --- Phase 4 Schemas ---
+
+class AutonomousAnalysisRequest(BaseModel):
+    doc_ids: list[int]
+
+
+class AutonomousAnalysisResponse(BaseModel):
+    doc_id: int
+    business_health: dict
+    top_risks: list[dict]
+    top_opportunities: list[dict]
+    forecasts: list[dict]
+    strategic_recommendations: list[dict]
+    overall_confidence: float
+
+
+class ExecutiveBriefingRequest(BaseModel):
+    doc_id: int
+    company_name: str = ""
+
+
+class ExecutiveBriefingResponse(BaseModel):
+    summary: str
+    business_health: str
+    critical_risks: list[str]
+    growth_opportunities: list[str]
+    forecast_outlook: str
+    recommended_actions: list[str]
+    confidence: float
