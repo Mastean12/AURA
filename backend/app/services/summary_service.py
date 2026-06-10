@@ -1,7 +1,7 @@
 import json
 import logging
 
-from app.services.ai_service import generate_response_async
+from app.services.ai_service import generate_response_async, _USER_FRIENDLY_ERROR
 from app.models.schemas import SummaryResponse
 
 logger = logging.getLogger(__name__)
@@ -84,9 +84,10 @@ async def summarize_document(doc_id: int, summary_type: int = 1) -> SummaryRespo
     try:
         raw = await generate_response_async(prompt)
     except Exception as e:
+        logger.warning("Summary AI call failed: %s", e)
         return SummaryResponse(
             summary_type=type_name,
-            content=[{"error": f"AI service unavailable: {e}"}],
+            content=[{"error": _USER_FRIENDLY_ERROR}],
             doc_id=doc_id,
         )
 

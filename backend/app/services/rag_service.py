@@ -1,7 +1,10 @@
 import asyncio
+import logging
 import uuid
 
-from app.services.ai_service import generate_response_async, get_ai_provider
+logger = logging.getLogger(__name__)
+
+from app.services.ai_service import generate_response_async, get_ai_provider, _USER_FRIENDLY_ERROR
 from app.services.embedding_service import search_vectorstore
 from app.services.session_service import store_query
 from app.models.schemas import QueryResponse
@@ -84,7 +87,8 @@ async def answer_question(
             prompt = _build_rag_prompt(context, question)
             answer = await generate_response_async(prompt)
         except Exception as e:
-            answer = f"AI service unavailable: {e}"
+            logger.warning("RAG AI call failed: %s", e)
+            answer = _USER_FRIENDLY_ERROR
 
         response = QueryResponse(
             answer=answer,
