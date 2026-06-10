@@ -14,6 +14,10 @@ import type {
   ExecutiveSummaryResponse,
   KPIResponse,
   ChartInsightResponse,
+  ForecastResponse,
+  AnomalyResponse,
+  RiskScoreResponse,
+  RecommendationResponse,
 } from "@/types";
 
 function log(level: "info" | "error", msg: string, data?: unknown) {
@@ -261,6 +265,64 @@ export async function getChartInsight(
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ doc_id, chart_type, column }),
+  });
+  return res.json();
+}
+
+// --- Phase 2 API Calls ---
+
+export async function getForecast(
+  doc_id: number,
+  column: string,
+  periods: number = 30
+): Promise<ForecastResponse> {
+  const url = `${API_BASE}/predictive/forecast`;
+  log("info", "POST", url);
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ doc_id, column, periods }),
+  });
+  return res.json();
+}
+
+export async function getAnomalies(
+  doc_id: number,
+  column: string,
+  severity?: string
+): Promise<AnomalyResponse> {
+  const url = `${API_BASE}/predictive/anomalies`;
+  log("info", "POST", url);
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ doc_id, column, severity }),
+  });
+  return res.json();
+}
+
+export async function getRiskScore(
+  doc_id: number
+): Promise<RiskScoreResponse> {
+  const url = `${API_BASE}/predictive/risk-score`;
+  log("info", "POST", url);
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ doc_id }),
+  });
+  return res.json();
+}
+
+export async function getRecommendations(
+  doc_id: number
+): Promise<RecommendationResponse> {
+  const url = `${API_BASE}/predictive/recommendations`;
+  log("info", "POST", url);
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ doc_id }),
   });
   return res.json();
 }

@@ -127,3 +127,75 @@ export interface ChartInsightResponse {
   column: string;
   insight: string;
 }
+
+// --- Phase 2 Types ---
+
+export interface ForecastPoint {
+  date: string;
+  value: number;
+  lower_bound: number;
+  upper_bound: number;
+}
+
+export interface ForecastResponse {
+  doc_id: number;
+  column: string;
+  historical: ForecastPoint[];
+  forecast: ForecastPoint[];
+  trend_direction: string;
+  trend_strength: number;
+  confidence_avg: number;
+  explanation: string;
+}
+
+export interface AnomalyItem {
+  index: number;
+  value: number;
+  expected: number;
+  deviation: number;
+  severity: string;
+  type: string;
+  explanation: string;
+}
+
+export interface AnomalyResponse {
+  doc_id: number;
+  column: string;
+  anomalies: AnomalyItem[];
+  anomaly_count: number;
+  high_severity_count: number;
+  summary: string;
+}
+
+export interface RiskCategory {
+  name: string;
+  score: number;
+  level: string;
+  explanation: string;
+  mitigations: string[];
+}
+
+export interface RiskScoreResponse {
+  doc_id: number;
+  overall_score: number;
+  overall_level: string;
+  overall_explanation: string;
+  categories: RiskCategory[];
+}
+
+export interface RecommendationItem {
+  title: string;
+  description: string;
+  category: string;
+  impact: string;
+  urgency: string;
+  confidence: number;
+  source: string;
+}
+
+export interface RecommendationResponse {
+  doc_id: number;
+  recommendations: RecommendationItem[];
+  total_count: number;
+  high_priority_count: number;
+}

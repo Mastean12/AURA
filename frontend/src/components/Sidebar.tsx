@@ -9,6 +9,7 @@ import {
   BarChart3,
   FileText,
   Sparkles,
+  TrendingUp,
 } from "lucide-react";
 import HealthCheck from "@/components/HealthCheck";
 
@@ -17,6 +18,7 @@ const navItems = [
   { href: "/upload", label: "Upload", icon: Upload },
   { href: "/chat", label: "Chat", icon: MessageSquare },
   { href: "/analytics", label: "Analytics", icon: BarChart3 },
+  { href: "/predictive", label: "Predictive", icon: TrendingUp },
   { href: "/reports", label: "Reports", icon: FileText },
 ];
 
