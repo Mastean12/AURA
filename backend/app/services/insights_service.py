@@ -1,17 +1,16 @@
 import json
 import logging
+import time
 
 import pandas as pd
 
 from app.services.ai_service import generate_response
 from app.database.database import get_session_factory
 from app.models.document import Document
+from app.services.cache_service import compute_doc_hash, get_cached, set_cached
 from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
-
-_insights_cache: dict[int, dict] = {}
-_executive_summary_cache: dict[int, dict] = {}
 
 
 def _df_to_summary(df: pd.DataFrame) -> str:
@@ -60,25 +59,41 @@ Dataset analysis:
 """
 
 
-async def generate_insights(doc_id: int) -> dict:
-    if doc_id in _insights_cache:
-        return _insights_cache[doc_id]
-
-    logger.info("Generating insights for doc_id=%d", doc_id)
+async def _get_doc(doc_id: int) -> tuple:
     try:
         async with get_session_factory()() as db:
             result = await db.execute(select(Document).where(Document.id == doc_id))
             doc = result.scalar_one_or_none()
+            if doc:
+                return doc.id, doc.content
     except Exception as e:
         logger.warning("DB error: %s", e)
-        doc = None
+    return doc_id, None
 
-    if not doc or not doc.content:
+
+async def _get_df(content: str):
+    if not content or content.count(",") <= 5:
+        return None
+    df = pd.read_csv(pd.io.common.StringIO(content))
+    return df if len(df.columns) >= 2 else None
+
+
+async def generate_insights(doc_id: int) -> dict:
+    real_id, content = await _get_doc(doc_id)
+    doc_hash = compute_doc_hash(content or "")
+
+    cached = await get_cached(real_id, doc_hash, "insights")
+    if cached:
+        logger.info("Cache hit: insights for doc_id=%d", real_id)
+        return cached
+
+    logger.info("Generating insights for doc_id=%d", real_id)
+    if not content:
         return {"executive_summary": "Document not found.", "key_findings": [], "risks": [],
                 "opportunities": [], "recommendations": [], "confidence_score": 0}
 
-    df = pd.read_csv(pd.io.common.StringIO(doc.content)) if doc.content.count(",") > 5 else None
-    if df is None or len(df.columns) < 2:
+    df = await _get_df(content)
+    if df is None:
         return {"executive_summary": "Dataset could not be parsed.", "key_findings": [], "risks": [],
                 "opportunities": [], "recommendations": [], "confidence_score": 0}
 
@@ -101,28 +116,25 @@ async def generate_insights(doc_id: int) -> dict:
     result.setdefault("recommendations", [])
     result.setdefault("confidence_score", 0)
 
-    _insights_cache[doc_id] = result
+    await set_cached(real_id, doc_hash, "insights", result)
     return result
 
 
 async def generate_executive_summary(doc_id: int) -> dict:
-    if doc_id in _executive_summary_cache:
-        return _executive_summary_cache[doc_id]
+    real_id, content = await _get_doc(doc_id)
+    doc_hash = compute_doc_hash(content or "")
 
-    logger.info("Generating executive summary for doc_id=%d", doc_id)
-    try:
-        async with get_session_factory()() as db:
-            result = await db.execute(select(Document).where(Document.id == doc_id))
-            doc = result.scalar_one_or_none()
-    except Exception as e:
-        logger.warning("DB error: %s", e)
-        doc = None
+    cached = await get_cached(real_id, doc_hash, "executive_summary")
+    if cached:
+        logger.info("Cache hit: executive_summary for doc_id=%d", real_id)
+        return cached
 
-    if not doc or not doc.content:
+    logger.info("Generating executive summary for doc_id=%d", real_id)
+    if not content:
         return {"summary": "Document not found.", "confidence": 0.0}
 
-    df = pd.read_csv(pd.io.common.StringIO(doc.content)) if doc.content.count(",") > 5 else None
-    if df is None or len(df.columns) < 2:
+    df = await _get_df(content)
+    if df is None:
         return {"summary": "Dataset could not be parsed as tabular data.", "confidence": 0.0}
 
     df_summary = _df_to_summary(df)
@@ -139,14 +151,15 @@ async def generate_executive_summary(doc_id: int) -> dict:
     result.setdefault("summary", "")
     result.setdefault("confidence", 0.0)
 
-    _executive_summary_cache[doc_id] = result
+    await set_cached(real_id, doc_hash, "executive_summary", result)
     return result
 
 
 def clear_cache(doc_id: int | None = None):
-    if doc_id:
-        _insights_cache.pop(doc_id, None)
-        _executive_summary_cache.pop(doc_id, None)
-    else:
-        _insights_cache.clear()
-        _executive_summary_cache.clear()
+    import asyncio
+    try:
+        asyncio.get_event_loop().run_until_complete(
+            __import__("app.services.cache_service", fromlist=["invalidate_cache"]).invalidate_cache(doc_id)
+        )
+    except Exception:
+        pass

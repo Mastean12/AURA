@@ -82,7 +82,7 @@ async def summarize_document(doc_id: int, summary_type: int = 1) -> SummaryRespo
     prompt = prompt_template.format(document=truncated)
 
     try:
-        raw = await generate_response_async(prompt)
+        raw = await generate_response_async(prompt, request_type="summary")
     except Exception as e:
         logger.warning("Summary AI call failed: %s", e)
         return SummaryResponse(

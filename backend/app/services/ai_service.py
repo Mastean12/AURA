@@ -32,9 +32,37 @@ def generate_response(prompt: str | list[dict]) -> str:
         raise ValueError(f"Unknown AI_PROVIDER: {provider}")
 
 
-async def generate_response_async(prompt: str | list[dict]) -> str:
+async def generate_response_async(prompt: str | list[dict], request_type: str = "general") -> str:
     import asyncio
-    return await asyncio.to_thread(generate_response, prompt)
+    start = time.perf_counter()
+    retry_count = 0
+    success = True
+    error_msg = None
+    try:
+        result = await asyncio.to_thread(generate_response, prompt)
+        return result
+    except Exception as e:
+        success = False
+        error_msg = str(e)
+        raise
+    finally:
+        elapsed = int((time.perf_counter() - start) * 1000)
+        try:
+            from app.services.monitoring_service import log_ai_usage
+            settings = get_settings()
+            tokens = len(str(prompt)) // 4
+            asyncio.ensure_future(log_ai_usage(
+                request_type=request_type,
+                provider=get_ai_provider(),
+                model=settings.gemini_model if get_ai_provider() == "gemini" else settings.openai_model,
+                tokens_estimated=tokens,
+                latency_ms=elapsed,
+                success=success,
+                error_message=error_msg,
+                retry_count=retry_count,
+            ))
+        except Exception as log_err:
+            logger.warning("Failed to log AI usage: %s", log_err)
 
 
 def _format_prompt_text(prompt: str | list[dict]) -> str:

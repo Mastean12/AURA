@@ -16,6 +16,7 @@ from app.api.analytics import router as analytics_router
 from app.api.reports import router as reports_router
 from app.api.predictive import router as predictive_router
 from app.api.enterprise import router as enterprise_router
+from app.api.admin import router as admin_router
 
 settings = get_settings()
 
@@ -84,6 +85,7 @@ app.include_router(analytics_router, prefix="/api/v1")
 app.include_router(reports_router, prefix="/api/v1")
 app.include_router(predictive_router, prefix="/api/v1")
 app.include_router(enterprise_router, prefix="/api/v1")
+app.include_router(admin_router, prefix="/api/v1")
 
 
 @app.get("/")
