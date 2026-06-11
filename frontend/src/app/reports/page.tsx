@@ -2,291 +2,184 @@
 
 import { useState, useEffect } from "react";
 import {
-  FileText,
-  ScrollText,
-  Lightbulb,
-  ListChecks,
-  ShieldAlert,
-  Download,
-  Loader2,
+  FileText, Download, Loader2, ScrollText, Brain, Building2, Globe,
 } from "lucide-react";
-import { getSummary, listDocuments, exportReport } from "@/lib/api";
+import { listDocuments, exportReport, getSummary } from "@/lib/api";
 import type { DocumentResponse, SummaryResponse } from "@/types";
 
-const SUMMARY_TYPES = [
-  { id: 1, label: "Executive Summary", icon: ScrollText, desc: "High-level overview" },
-  { id: 2, label: "Key Findings", icon: ListChecks, desc: "Important discoveries" },
-  { id: 3, label: "Recommendations", icon: Lightbulb, desc: "Actionable suggestions" },
-  { id: 4, label: "Risks", icon: ShieldAlert, desc: "Potential issues" },
+const REPORT_TYPES = [
+  {
+    id: "executive-briefing-pdf",
+    label: "Executive Briefing",
+    icon: ScrollText,
+    desc: "2-5 page briefing for managers and directors",
+    color: "text-emerald-400",
+    border: "border-emerald-800/30",
+    bg: "bg-emerald-950/20",
+    activeBg: "bg-emerald-600/20",
+  },
+  {
+    id: "board-report",
+    label: "Board Report",
+    icon: Building2,
+    desc: "10-20 page comprehensive board report",
+    color: "text-blue-400",
+    border: "border-blue-800/30",
+    bg: "bg-blue-950/20",
+    activeBg: "bg-blue-600/20",
+  },
+  {
+    id: "intelligence-report",
+    label: "Intelligence Report",
+    icon: Brain,
+    desc: "Research-grade analysis for strategy teams",
+    color: "text-purple-400",
+    border: "border-purple-800/30",
+    bg: "bg-purple-950/20",
+    activeBg: "bg-purple-600/20",
+  },
+  {
+    id: "analytics-export",
+    label: "Analytics Export",
+    icon: FileText,
+    desc: "PDF export with charts and statistics",
+    color: "text-zinc-400",
+    border: "border-zinc-800",
+    bg: "bg-zinc-900/50",
+    activeBg: "bg-zinc-800",
+  },
 ] as const;
+
+type ReportType = (typeof REPORT_TYPES)[number]["id"];
 
 export default function ReportsPage() {
   const [docs, setDocs] = useState<DocumentResponse[]>([]);
-  const [selectedDoc, setSelectedDoc] = useState<DocumentResponse | null>(null);
-  const [summaryType, setSummaryType] = useState<number>(1);
-  const [result, setResult] = useState<SummaryResponse | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [exporting, setExporting] = useState(false);
+  const [reportType, setReportType] = useState<ReportType>("executive-briefing-pdf");
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [generating, setGenerating] = useState(false);
   const [fetched, setFetched] = useState(false);
 
-  useEffect(() => {
-    if (!fetched) listDocuments().then(setDocs).finally(() => setFetched(true));
-  }, []);
+  useEffect(() => { if (!fetched) listDocuments().then(setDocs).finally(() => setFetched(true)); }, []);
 
-  async function generate() {
-    if (!selectedDoc) return;
-    setLoading(true);
-    setResult(null);
-    try {
-      const data = await getSummary(selectedDoc.id, summaryType);
-      setResult(data);
-    } catch {
-      // ignore
-    } finally {
-      setLoading(false);
-    }
+  function toggleDoc(id: number) {
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
   }
 
-  async function handleExport() {
-    if (!selectedDoc) return;
-    setExporting(true);
+  async function handleGenerate() {
+    if (selectedIds.length === 0) return;
+    setGenerating(true);
     try {
-      const blob = await exportReport(selectedDoc.id);
-      const url = URL.createObjectURL(blob);
+      let blob: Blob;
+      if (reportType === "analytics-export") {
+        blob = await exportReport(selectedIds[0]);
+      } else {
+        const url = `http://localhost:8000/api/v1/reports/${reportType}`;
+        const res = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ doc_ids: selectedIds, company_name: "" }),
+        });
+        if (!res.ok) throw new Error("Report generation failed");
+        blob = await res.blob();
+      }
+      const dlUrl = URL.createObjectURL(blob);
       const a = document.createElement("a");
-      a.href = url;
-      a.download = `aura-report-${selectedDoc.id}.pdf`;
+      a.href = dlUrl;
+      a.download = `aura-${reportType}-${Date.now()}.pdf`;
       a.click();
-      URL.revokeObjectURL(url);
-    } catch {
-      // ignore
+      URL.revokeObjectURL(dlUrl);
+    } catch (e) {
+      console.error("Report failed:", e);
     } finally {
-      setExporting(false);
+      setGenerating(false);
     }
   }
 
-  function renderContent() {
-    if (!result || !result.content.length) return null;
-    const item = result.content[0] as Record<string, unknown>;
-
-    if (summaryType === 1) {
-      const title = item.title as string | undefined;
-      const summary = item.summary as string | undefined;
-      const key_points = item.key_points as string[] | undefined;
-      return (
-        <div className="space-y-4">
-          {title && <h3 className="text-lg font-medium">{title}</h3>}
-          {summary && <p className="text-sm leading-relaxed text-zinc-300">{summary}</p>}
-          {Array.isArray(key_points) && (
-            <ul className="space-y-1">
-              {key_points.map((p, i) => (
-                <li key={i} className="flex gap-2 text-sm text-zinc-400">
-                  <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-blue-400" />
-                  {p}
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      );
-    }
-
-    if (summaryType === 2) {
-      const findings = item.findings as Record<string, string>[] | undefined;
-      if (!Array.isArray(findings)) return null;
-      return (
-        <div className="space-y-3">
-          {findings.map((f, i) => (
-            <div key={i} className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-4">
-              <div className="flex items-start justify-between gap-2">
-                <p className="text-sm text-zinc-200">{f.finding}</p>
-                <span
-                  className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium uppercase ${
-                    f.significance === "high"
-                      ? "bg-red-950 text-red-400"
-                      : f.significance === "medium"
-                      ? "bg-amber-950 text-amber-400"
-                      : "bg-zinc-800 text-zinc-400"
-                  }`}
-                >
-                  {f.significance}
-                </span>
-              </div>
-            </div>
-          ))}
-        </div>
-      );
-    }
-
-    if (summaryType === 3) {
-      const recommendations = item.recommendations as Record<string, string>[] | undefined;
-      if (!Array.isArray(recommendations)) return null;
-      return (
-        <div className="space-y-3">
-          {recommendations.map((r, i) => (
-            <div key={i} className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-4">
-              <div className="flex items-start justify-between gap-2">
-                <div className="space-y-1">
-                  <p className="text-sm text-zinc-200">{r.recommendation}</p>
-                  {r.impact && (
-                    <p className="text-xs text-zinc-500">Impact: {r.impact}</p>
-                  )}
-                </div>
-                <span
-                  className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium uppercase ${
-                    r.priority === "high"
-                      ? "bg-red-950 text-red-400"
-                      : r.priority === "medium"
-                      ? "bg-amber-950 text-amber-400"
-                      : "bg-emerald-950 text-emerald-400"
-                  }`}
-                >
-                  {r.priority}
-                </span>
-              </div>
-            </div>
-          ))}
-        </div>
-      );
-    }
-
-    if (summaryType === 4) {
-      const risks = item.risks as Record<string, string>[] | undefined;
-      if (!Array.isArray(risks)) return null;
-      return (
-        <div className="space-y-3">
-          {risks.map((r, i) => (
-            <div key={i} className="rounded-lg border border-red-900/50 bg-red-950/20 p-4">
-              <div className="flex items-start justify-between gap-2">
-                <div className="space-y-1">
-                  <p className="text-sm text-zinc-200">{r.risk}</p>
-                  {r.mitigation && (
-                    <p className="text-xs text-zinc-500">
-                      Mitigation: {r.mitigation}
-                    </p>
-                  )}
-                </div>
-                <span
-                  className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium uppercase ${
-                    r.severity === "high"
-                      ? "bg-red-950 text-red-400"
-                      : r.severity === "medium"
-                      ? "bg-amber-950 text-amber-400"
-                      : "bg-zinc-800 text-zinc-400"
-                  }`}
-                >
-                  {r.severity}
-                </span>
-              </div>
-            </div>
-          ))}
-        </div>
-      );
-    }
-
-    return null;
-  }
+  const activeConfig = REPORT_TYPES.find(r => r.id === reportType)!;
 
   return (
-    <div className="mx-auto max-w-5xl space-y-8 p-8">
+    <div className="mx-auto max-w-5xl space-y-8 p-6">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Reports</h1>
-        <p className="mt-1 text-sm text-zinc-400">
-          Generate AI-powered summaries and analysis
+        <p className="mt-1 text-sm text-zinc-500">
+          Generate executive-grade intelligence reports and board-ready PDFs
         </p>
       </div>
 
+      {/* Report type selector */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {SUMMARY_TYPES.map(({ id, label, icon: Icon, desc }) => (
-          <button
-            key={id}
-            onClick={() => setSummaryType(id)}
+        {REPORT_TYPES.map(({ id, label, icon: Icon, desc, border, bg, activeBg }) => (
+          <button key={id} onClick={() => setReportType(id as ReportType)}
             className={`rounded-xl border p-4 text-left transition-colors ${
-              summaryType === id
-                ? "border-blue-600 bg-blue-600/10"
-                : "border-zinc-800 bg-zinc-900/50 hover:border-zinc-700"
-            }`}
-          >
-            <Icon
-              className={`h-5 w-5 ${
-                summaryType === id ? "text-blue-400" : "text-zinc-500"
-              }`}
-            />
+              reportType === id ? `${activeBg} ${border}` : "border-zinc-800 bg-zinc-900/50 hover:border-zinc-700"
+            }`}>
+            <Icon className={`h-5 w-5 ${reportType === id ? activeConfig.color : "text-zinc-500"}`} />
             <p className="mt-2 text-sm font-medium">{label}</p>
             <p className="mt-0.5 text-xs text-zinc-500">{desc}</p>
           </button>
         ))}
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <select
-          value={selectedDoc?.id ?? ""}
-          onChange={(e) =>
-            setSelectedDoc(docs.find((d) => d.id === Number(e.target.value)) ?? null)
-          }
-          className="rounded-xl border border-zinc-800 bg-zinc-900/70 px-4 py-3 text-sm text-zinc-100 outline-none focus:border-blue-600"
-        >
-          <option value="">Select a document...</option>
-          {docs.map((d) => (
-            <option key={d.id} value={d.id}>
-              {d.title}
-            </option>
+      {/* Document selector */}
+      <div className="rounded-xl border border-zinc-800 bg-zinc-900/30 p-4">
+        <p className="text-xs font-medium uppercase tracking-wider text-zinc-500 mb-2">
+          Select documents {reportType === "analytics-export" ? "" : "(select 1+)"}
+        </p>
+        <div className="flex flex-wrap gap-2">
+          {docs.map(d => (
+            <button key={d.id} onClick={() => toggleDoc(d.id)}
+              className={`rounded-xl border px-3 py-1.5 text-xs transition-colors ${
+                selectedIds.includes(d.id) ? `${activeConfig.activeBg} ${activeConfig.border}` : "border-zinc-800 bg-zinc-900/50 text-zinc-400 hover:border-zinc-700"
+              }`}>
+              {d.title.slice(0, 30)}
+            </button>
           ))}
-        </select>
-
-        <button
-          onClick={generate}
-          disabled={!selectedDoc || loading}
-          className="flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-sm font-medium hover:bg-blue-500 disabled:opacity-50"
-        >
-          {loading ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <FileText className="h-4 w-4" />
+        </div>
+        <div className="mt-3 flex items-center gap-3">
+          <button onClick={handleGenerate} disabled={generating || selectedIds.length === 0}
+            className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-xs font-medium hover:bg-blue-500 disabled:opacity-50">
+            {generating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+            {generating ? "Generating..." : `Generate ${activeConfig.label}`}
+          </button>
+          {reportType === "analytics-export" && selectedIds.length > 0 && (
+            <span className="text-xs text-zinc-600">Exporting analytics for doc #{selectedIds[0]}</span>
           )}
-          {loading ? "Generating..." : "Generate Report"}
-        </button>
-        <button
-          onClick={handleExport}
-          disabled={!selectedDoc || exporting}
-          className="flex items-center justify-center gap-2 rounded-xl border border-zinc-700 px-4 py-3 text-sm font-medium text-zinc-300 hover:bg-zinc-800 disabled:opacity-50"
-        >
-          {exporting ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <Download className="h-4 w-4" />
+          {reportType !== "analytics-export" && selectedIds.length > 0 && (
+            <span className="text-xs text-zinc-600">{selectedIds.length} document(s) selected</span>
           )}
-          {exporting ? "Exporting..." : "Export PDF"}
-        </button>
+        </div>
       </div>
 
-      {result && (
-        <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-6">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-sm font-medium uppercase tracking-wider text-zinc-500">
-              {result.summary_type.replace(/_/g, " ")}
-            </h2>
-            <button
-              onClick={() => {
-                const blob = new Blob([JSON.stringify(result, null, 2)], {
-                  type: "application/json",
-                });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement("a");
-                a.href = url;
-                a.download = `${result.summary_type}-${result.doc_id}.json`;
-                a.click();
-                URL.revokeObjectURL(url);
-              }}
-              className="flex items-center gap-1.5 rounded-lg border border-zinc-800 px-3 py-1.5 text-xs text-zinc-400 hover:bg-zinc-800"
-            >
-              <Download className="h-3.5 w-3.5" />
-              Export JSON
-            </button>
-          </div>
-          {renderContent()}
+      {/* Info */}
+      <div className="rounded-xl border border-zinc-800 bg-zinc-900/30 p-5">
+        <h3 className="text-sm font-medium text-zinc-200 mb-2">About {activeConfig.label}</h3>
+        <div className="space-y-2 text-xs text-zinc-500">
+          {reportType === "executive-briefing-pdf" && (
+            <>
+              <p>Length: 2-5 pages. Audience: Managers, Directors, Executives.</p>
+              <p>Sections: Executive Summary, Business Health Score, Top Risks, Top Opportunities, Recommended Actions, Conclusion.</p>
+            </>
+          )}
+          {reportType === "board-report" && (
+            <>
+              <p>Length: 10-20 pages. Audience: Board Members, Investors, NGO Leadership.</p>
+              <p>Sections: Cover, TOC, Executive Summary, Health Assessment, KPI Dashboard, Risk Analysis, Opportunity Analysis, Forecasting, Strategic Recommendations, Scenario Analysis, Appendices.</p>
+            </>
+          )}
+          {reportType === "intelligence-report" && (
+            <>
+              <p>Length: 8-15 pages. Audience: Researchers, Consultants, Strategy Teams.</p>
+              <p>Sections: Executive Summary, Key Findings, Evidence Analysis, Comparative Analysis, Strategic Implications, Recommendations, Supporting Evidence.</p>
+            </>
+          )}
+          {reportType === "analytics-export" && (
+            <>
+              <p>Length: varies. Audience: Technical teams, analysts.</p>
+              <p>Sections: Cover, Executive Summary, Dataset Overview, Health, KPI Summary, Visualizations, Risks, Opportunities, Recommendations.</p>
+            </>
+          )}
         </div>
-      )}
+      </div>
     </div>
   );
 }

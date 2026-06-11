@@ -54,21 +54,6 @@ async def autonomous_analysis(payload: AutonomousAnalysisRequest):
     )
 
 
-@router.post("/reports/board-report")
-async def board_report(payload: BoardReportRequest):
-    try:
-        pdf_bytes = await generate_board_report(payload.doc_id, payload.company_name)
-        return Response(
-            content=pdf_bytes,
-            media_type="application/pdf",
-            headers={"Content-Disposition": f"attachment; filename=board-report-{payload.doc_id}.pdf"},
-        )
-    except Exception as e:
-        logger = __import__("logging").getLogger(__name__)
-        logger.warning("Board report failed: %s", e)
-        raise HTTPException(status_code=500, detail="Board report generation failed.")
-
-
 @router.post("/reports/executive-briefing", response_model=ExecutiveBriefingResponse)
 async def executive_briefing(payload: ExecutiveBriefingRequest):
     result = await generate_executive_briefing(payload.doc_id, payload.company_name)
