@@ -11,6 +11,7 @@ export interface QueryRequest {
   question: string;
   k?: number;
   session_id?: string;
+  doc_id?: number;
 }
 
 export interface QueryResponse {
@@ -35,6 +36,9 @@ export interface DocumentResponse {
   source: string | null;
   file_type: string | null;
   file_size: number | null;
+  processing_status: string | null;
+  chunk_count: number | null;
+  page_count: number | null;
   created_at: string;
   updated_at: string;
 }
