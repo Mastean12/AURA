@@ -11,6 +11,7 @@ import {
   Sparkles,
   TrendingUp,
   Building2,
+  Brain,
 } from "lucide-react";
 import HealthCheck from "@/components/HealthCheck";
 
@@ -21,6 +22,7 @@ const navItems = [
   { href: "/analytics", label: "Analytics", icon: BarChart3 },
   { href: "/predictive", label: "Predictive", icon: TrendingUp },
   { href: "/enterprise", label: "Enterprise", icon: Building2 },
+  { href: "/executive", label: "Executive", icon: Brain },
   { href: "/reports", label: "Reports", icon: FileText },
 ];
 
