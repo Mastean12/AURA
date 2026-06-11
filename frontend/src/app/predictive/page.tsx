@@ -93,14 +93,7 @@ export default function PredictivePage() {
     } finally { setRecommendationsLoading(false); }
   }
 
-  useEffect(() => {
-    if (selectedDoc && analytics) {
-      runForecast();
-      runAnomalies();
-      runRisk();
-      runRecommendations();
-    }
-  }, [selectedDoc, analytics]);
+  // AI-powered analyses are triggered manually via the Run buttons below
 
   const numericCols = analytics?.columns.filter(c => c.dtype === "numeric") ?? [];
 

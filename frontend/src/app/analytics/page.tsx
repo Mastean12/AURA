@@ -76,22 +76,45 @@ export default function AnalyticsPage() {
     setChatMessages([]);
     const a = await getAnalytics(docId);
     setAnalytics(a);
-    setExecSummaryLoading(true); setHealthLoading(true); setInsightsLoading(true);
-    setChartsLoading(true); setKpisLoading(true);
+    setHealthLoading(true); setChartsLoading(true); setKpisLoading(true);
     Promise.all([
-      getExecutiveSummary(docId).then(setExecSummary).finally(() => setExecSummaryLoading(false)),
       getDatasetHealth(docId).then(setHealth).finally(() => setHealthLoading(false)),
-      getInsights(docId).then(setInsights).finally(() => setInsightsLoading(false)),
       getAllCharts(docId).then(setCharts).finally(() => setChartsLoading(false)),
       getKPIs(docId).then((r: KPIResponse) => setKpis(r.kpis)).finally(() => setKpisLoading(false)),
     ]);
   }
 
-  useEffect(() => {
-    if (charts && selectedDoc && !chartsLoading) {
-      loadChartInsights();
+  async function analyzeInsights() {
+    if (!selectedDoc) return;
+    setInsightsLoading(true);
+    try { setInsights(await getInsights(selectedDoc)); } finally { setInsightsLoading(false); }
+  }
+
+  async function analyzeExecutiveSummary() {
+    if (!selectedDoc) return;
+    setExecSummaryLoading(true);
+    try { setExecSummary(await getExecutiveSummary(selectedDoc)); } finally { setExecSummaryLoading(false); }
+  }
+
+  async function analyzeChartInsights() {
+    if (!charts || !selectedDoc) return;
+    setChartInsightsLoading(true);
+    setChartInsights({});
+    const chartTypes = ["bar", "pie", "line", "area", "histogram", "distribution"];
+    const results: Record<string, string> = {};
+    for (const ct of chartTypes) {
+      if (charts[ct as keyof ChartsResponse]) {
+        try {
+          const res = await getChartInsight(selectedDoc, ct, charts.column);
+          results[ct] = res.insight;
+        } catch {
+          results[ct] = "Chart insight temporarily unavailable.";
+        }
+      }
     }
-  }, [charts, chartsLoading, selectedDoc]);
+    setChartInsights(results);
+    setChartInsightsLoading(false);
+  }
 
   async function sendChat() {
     if (!chatInput.trim() || !selectedDoc || chatLoading) return;
@@ -154,10 +177,10 @@ export default function AnalyticsPage() {
 
       {selectedDoc && (
         <div className="space-y-6">
-          {/* SECTION 1: Executive Summary */}
+          {/* SECTION 1: Executive Summary — manual trigger */}
           {execSummaryLoading ? (
             <div className="h-24 animate-pulse rounded-xl bg-zinc-800/50" />
-          ) : execSummary && (
+          ) : execSummary ? (
             <div className="rounded-xl border border-emerald-900/30 bg-emerald-950/20 p-5">
               <div className="flex items-center gap-2 mb-3">
                 <FileText className="h-5 w-5 text-emerald-400" />
@@ -168,6 +191,11 @@ export default function AnalyticsPage() {
               </div>
               <p className="text-sm leading-relaxed text-zinc-200">{execSummary.summary}</p>
             </div>
+          ) : (
+            <button onClick={analyzeExecutiveSummary} className="flex items-center gap-2 rounded-xl border border-emerald-800/30 bg-emerald-950/20 px-5 py-4 text-sm text-emerald-400 hover:bg-emerald-950/40 w-full">
+              <FileText className="h-5 w-5" />
+              Generate Executive Summary
+            </button>
           )}
 
           {/* SECTION 2: Business Health Score */}
@@ -229,10 +257,10 @@ export default function AnalyticsPage() {
             </div>
           )}
 
-          {/* SECTION 4: AURA Intelligence */}
+          {/* SECTION 4: AURA Intelligence — manual trigger */}
           {insightsLoading ? (
             <div className="h-48 animate-pulse rounded-xl bg-zinc-800/50" />
-          ) : insights && (
+          ) : insights ? (
             <div className="rounded-xl border border-blue-900/30 bg-blue-950/20 p-5">
               <div className="flex items-center gap-2 mb-4">
                 <Brain className="h-5 w-5 text-blue-400" />
@@ -249,6 +277,11 @@ export default function AnalyticsPage() {
                 <InsightCard icon={Flag} title="Recommendations" items={insights.recommendations} color="purple" />
               </div>
             </div>
+          ) : (
+            <button onClick={analyzeInsights} className="flex items-center gap-2 rounded-xl border border-blue-900/30 bg-blue-950/20 px-5 py-4 text-sm text-blue-400 hover:bg-blue-950/40 w-full">
+              <Brain className="h-5 w-5" />
+              Analyze Intelligence (Findings, Risks, Opportunities)
+            </button>
           )}
 
           {/* Basic KPI Cards (Rows, Columns, etc) */}
@@ -340,10 +373,10 @@ export default function AnalyticsPage() {
             </div>
           )}
 
-          {/* SECTION 6: Chart Insight Cards */}
+          {/* SECTION 6: Chart Insight Cards — manual trigger */}
           {chartInsightsLoading ? (
             <div className="h-32 animate-pulse rounded-xl bg-zinc-800/50" />
-          ) : Object.keys(chartInsights).length > 0 && (
+          ) : Object.keys(chartInsights).length > 0 ? (
             <div>
               <div className="mb-3 flex items-center gap-2">
                 <LineChart className="h-5 w-5 text-zinc-400" />
@@ -363,6 +396,11 @@ export default function AnalyticsPage() {
                 ))}
               </div>
             </div>
+          ) : charts && (
+            <button onClick={analyzeChartInsights} disabled={!charts} className="flex items-center gap-2 rounded-xl border border-zinc-800 bg-zinc-900/50 px-5 py-4 text-sm text-zinc-400 hover:bg-zinc-800/70 w-full disabled:opacity-30">
+              <LineChart className="h-5 w-5" />
+              Generate Chart Insights
+            </button>
           )}
 
           {/* SECTION 7: Analytics Assistant */}

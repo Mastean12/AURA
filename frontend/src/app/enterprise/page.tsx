@@ -85,12 +85,7 @@ export default function EnterprisePage() {
     try { setBriefing(await getExecutiveBriefing(selectedDoc)); } finally { setBriefingLoading(false); }
   }
 
-  useEffect(() => {
-    if (selectedDoc) {
-      runIndustry();
-      runBriefing();
-    }
-  }, [selectedDoc]);
+  // AI-powered analyses are triggered manually via the Generate buttons below
 
   return (
     <div className="mx-auto max-w-7xl space-y-6 p-6">
