@@ -21,6 +21,12 @@ from app.api.executive import router as executive_router
 from app.api.auth import router as auth_router
 from app.api.workspaces import router as workspaces_router
 
+# Import all models so SQLAlchemy metadata registers them for create_all
+from app.models.user import User  # noqa: F401
+from app.models.organization import Organization  # noqa: F401
+from app.models.workspace import Workspace, WorkspaceMember  # noqa: F401
+from app.models.audit_log import AuditLog  # noqa: F401
+
 settings = get_settings()
 
 logging.basicConfig(
