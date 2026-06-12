@@ -9,6 +9,10 @@ export default function ProfilePage() {
   const [user, setUser] = useState<Record<string, unknown> | null>(null);
 
   useEffect(() => {
+    if (!localStorage.getItem("aura_token")) router.push("/login");
+  }, []);
+
+  useEffect(() => {
     const stored = localStorage.getItem("aura_user");
     if (stored) setUser(JSON.parse(stored));
   }, []);
@@ -16,6 +20,7 @@ export default function ProfilePage() {
   function handleLogout() {
     localStorage.removeItem("aura_token");
     localStorage.removeItem("aura_user");
+    document.cookie = "aura_token=; path=/; max-age=0";
     router.push("/login");
   }
 

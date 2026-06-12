@@ -25,6 +25,7 @@ export default function LoginPage() {
       if (!res.ok) { setError(data.detail || "Login failed"); return; }
       localStorage.setItem("aura_token", data.access_token);
       localStorage.setItem("aura_user", JSON.stringify(data.user));
+      document.cookie = `aura_token=${data.access_token}; path=/; max-age=86400; SameSite=Lax`;
       router.push("/dashboard");
     } catch { setError("Connection failed"); }
     finally { setLoading(false); }

@@ -64,6 +64,7 @@ export default function AppHeader({ onToggleSidebar }: { onToggleSidebar?: () =>
   function handleLogout() {
     localStorage.removeItem("aura_token");
     localStorage.removeItem("aura_user");
+    document.cookie = "aura_token=; path=/; max-age=0";
     router.push("/login");
   }
 
