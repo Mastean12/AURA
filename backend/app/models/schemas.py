@@ -16,6 +16,9 @@ class DocumentResponse(BaseModel):
     source: Optional[str] = None
     file_type: Optional[str] = None
     file_size: Optional[int] = None
+    processing_status: Optional[str] = "pending"
+    chunk_count: Optional[int] = 0
+    page_count: Optional[int] = 0
     created_at: datetime
     updated_at: datetime
 
@@ -31,6 +34,7 @@ class QueryRequest(BaseModel):
     question: str
     k: int = 5
     session_id: str | None = None
+    doc_id: int | None = None
 
 
 class QueryResponse(BaseModel):

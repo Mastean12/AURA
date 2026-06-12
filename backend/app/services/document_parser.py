@@ -2,7 +2,7 @@ import os
 import re
 from pathlib import Path
 
-ALLOWED_EXTENSIONS = {".pdf", ".docx", ".csv", ".xlsx"}
+ALLOWED_EXTENSIONS = {".pdf", ".docx", ".csv", ".xlsx", ".txt"}
 
 
 def allowed_file(filename: str) -> bool:
@@ -18,6 +18,19 @@ def clean_text(text: str) -> str:
     return text.strip()
 
 
+def extract_metadata(filepath: str) -> dict:
+    ext = Path(filepath).suffix.lower()
+    meta = {"file_type": ext.lstrip(".").upper(), "page_count": 0, "char_count": 0}
+    if ext == ".pdf":
+        try:
+            from PyPDF2 import PdfReader
+            reader = PdfReader(filepath)
+            meta["page_count"] = len(reader.pages)
+        except Exception:
+            pass
+    return meta
+
+
 def extract_text(filepath: str) -> str:
     ext = Path(filepath).suffix.lower()
 
@@ -29,6 +42,8 @@ def extract_text(filepath: str) -> str:
         raw = _extract_csv(filepath)
     elif ext == ".xlsx":
         raw = _extract_xlsx(filepath)
+    elif ext == ".txt":
+        raw = _extract_txt(filepath)
     else:
         raise ValueError(f"Unsupported file type: {ext}")
 
@@ -37,7 +52,6 @@ def extract_text(filepath: str) -> str:
 
 def _extract_pdf(filepath: str) -> str:
     from PyPDF2 import PdfReader
-
     reader = PdfReader(filepath)
     pages = []
     for page in reader.pages:
@@ -49,7 +63,6 @@ def _extract_pdf(filepath: str) -> str:
 
 def _extract_docx(filepath: str) -> str:
     from docx import Document
-
     doc = Document(filepath)
     paragraphs = [p.text for p in doc.paragraphs if p.text.strip()]
     return "\n".join(paragraphs)
@@ -57,7 +70,6 @@ def _extract_docx(filepath: str) -> str:
 
 def _extract_csv(filepath: str) -> str:
     import pandas as pd
-
     df = pd.read_csv(filepath)
     lines = []
     lines.append(",".join(str(c) for c in df.columns))
@@ -68,7 +80,6 @@ def _extract_csv(filepath: str) -> str:
 
 def _extract_xlsx(filepath: str) -> str:
     from openpyxl import load_workbook
-
     wb = load_workbook(filepath, read_only=True, data_only=True)
     lines = []
     for sheet in wb.worksheets:
@@ -79,6 +90,11 @@ def _extract_xlsx(filepath: str) -> str:
                 lines.append(row_text)
     wb.close()
     return "\n".join(lines)
+
+
+def _extract_txt(filepath: str) -> str:
+    with open(filepath, "r", encoding="utf-8", errors="replace") as f:
+        return f.read()
 
 
 def save_upload(content: bytes, filename: str, upload_dir: str) -> str:

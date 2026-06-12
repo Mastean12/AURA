@@ -1,4 +1,3 @@
-import asyncio
 import logging
 from datetime import datetime, timezone
 
@@ -7,22 +6,21 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
 from app.database.database import get_db
-from app.models.schemas import DocumentCreate, DocumentResponse, UploadResponse, BulkDeleteRequest
+from app.models.schemas import DocumentCreate, DocumentResponse, UploadResponse, BulkDeleteRequest, QueryRequest, QueryResponse
 from app.services.document_service import (
     create_document, list_documents, get_document, delete_document,
-    bulk_delete_documents, classify_file_type,
+    bulk_delete_documents,
 )
-from app.services.document_service import store_chunks as store_chunks_db
-from app.services.document_parser import allowed_file, extract_text, save_upload
-from app.services.chunking_service import chunk_text
-from app.services.embedding_service import store_chunk_vectors
+from app.services.document_parser import allowed_file
+from app.services.document_processing_service import process_document, classify_file_type
+from app.services.rag_service import answer_question
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["documents"])
 settings = get_settings()
 
-ALLOWED_STR = ", ".join(sorted([".csv", ".docx", ".pdf", ".xlsx"]))
+ALLOWED_STR = ", ".join(sorted([".csv", ".docx", ".pdf", ".xlsx", ".txt"]))
 
 
 @router.post("/documents/", response_model=DocumentResponse)
@@ -52,16 +50,24 @@ async def batch_delete(payload: BulkDeleteRequest, db: AsyncSession = Depends(ge
     return {"detail": f"{deleted} document(s) deleted", "deleted_count": deleted}
 
 
+@router.post("/documents/query", response_model=QueryResponse)
+async def query(payload: QueryRequest):
+    return await answer_question(
+        question=payload.question,
+        k=payload.k or 5,
+        session_id=payload.session_id,
+        doc_id=payload.doc_id,
+    )
+
+
 @router.post("/upload/", response_model=UploadResponse)
-async def upload_file(file: UploadFile = File(...), db: AsyncSession = Depends(get_db)):
+async def upload_file(file: UploadFile = File(...)):
     logger.info("Upload request received: filename=%s", file.filename)
 
     if not file.filename:
-        logger.warning("Upload rejected: no filename")
         raise HTTPException(status_code=400, detail="No filename provided")
 
     if not allowed_file(file.filename):
-        logger.warning("Upload rejected: unsupported type %s", file.filename)
         raise HTTPException(
             status_code=400,
             detail=f"File type not supported. Allowed: {ALLOWED_STR}",
@@ -72,64 +78,12 @@ async def upload_file(file: UploadFile = File(...), db: AsyncSession = Depends(g
     file_type = classify_file_type(file.filename)
     logger.info("File read: filename=%s type=%s size=%d bytes", file.filename, file_type, file_size)
 
-    ts = datetime.now(timezone.utc).isoformat()
-    disk_path = save_upload(content_bytes, file.filename, settings.upload_dir)
-    logger.info("File saved: path=%s size=%d timestamp=%s", disk_path, file_size, ts)
-
-    try:
-        parsed_text = extract_text(disk_path)
-    except Exception:
-        parsed_text = ""
-
-    doc_id = None
-    try:
-        payload = DocumentCreate(
-            title=file.filename,
-            content=parsed_text,
-            source=file.filename,
-        )
-        doc = await create_document(db, payload)
-        doc_id = doc.id
-        if file_size:
-            doc.file_size = file_size
-            await db.commit()
-    except Exception:
-        pass
-
-    if parsed_text:
-        langchain_docs = chunk_text(parsed_text, source=file.filename)
-        chunk_dicts = [
-            {
-                "chunk_index": d.metadata["chunk_index"],
-                "content": d.page_content,
-                "source": file.filename,
-            }
-            for d in langchain_docs
-        ]
-        try:
-            await store_chunks_db(db, doc_id, chunk_dicts)
-        except Exception:
-            pass
-        try:
-            await asyncio.wait_for(
-                asyncio.to_thread(
-                    store_chunk_vectors, chunk_dicts,
-                    filename=file.filename, doc_id=doc_id,
-                ),
-                timeout=5,
-            )
-        except Exception:
-            pass
-
-    logger.info(
-        "Upload complete: filename=%s type=%s size=%d parsed=%d chars",
-        file.filename, file_type, file_size, len(parsed_text),
-    )
+    doc_id = await process_document(content_bytes, file.filename)
 
     return UploadResponse(
         filename=file.filename,
         size=file_size,
         file_type=file_type,
         upload_timestamp=datetime.now(timezone.utc),
-        content_preview=parsed_text[:200] if parsed_text else None,
+        content_preview=file.filename,
     )

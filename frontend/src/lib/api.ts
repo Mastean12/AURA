@@ -60,6 +60,22 @@ export async function query(payload: {
   return data;
 }
 
+export async function queryDocuments(payload: {
+  question: string;
+  k?: number;
+  session_id?: string;
+  doc_id?: number;
+}): Promise<QueryResponse> {
+  const url = `${API_BASE}/documents/query`;
+  log("info", "POST", url);
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  return res.json();
+}
+
 export async function uploadFile(file: File): Promise<UploadResponse> {
   const form = new FormData();
   form.append("file", file);
