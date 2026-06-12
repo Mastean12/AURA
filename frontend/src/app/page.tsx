@@ -1,285 +1,234 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
-import {
-  FileText,
-  MessageSquare,
-  Database,
-  Server,
-  Sparkles,
-  ArrowRight,
-} from "lucide-react";
 import Link from "next/link";
-import { listDocuments, health, getAnalytics, getCharts } from "@/lib/api";
-import type { DocumentResponse, ChartsResponse } from "@/types";
+import {
+  Sparkles, FileText, BarChart3, TrendingUp, Building2, Users, Shield,
+  Brain, Bot, AlertTriangle, Target, LineChart, ScrollText, Globe,
+  CheckCircle, ArrowRight, Menu, X, ChevronRight,
+} from "lucide-react";
 
-export default function Dashboard() {
-  const router = useRouter();
-  const [docs, setDocs] = useState<DocumentResponse[]>([]);
-  const [serverStatus, setServerStatus] = useState<string>("");
-  const [totalChats, setTotalChats] = useState(0);
-  const [latestDocAnalytics, setLatestDocAnalytics] = useState<{
-    row_count: number;
-    column_count: number;
-  } | null>(null);
-  const [chartData, setChartData] = useState<ChartsResponse | null>(null);
-  const [loaded, setLoaded] = useState(false);
+export default function LandingPage() {
+  const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
     const token = localStorage.getItem("aura_token");
-    if (!token) {
-      router.push("/login");
-      return;
-    }
+    if (token) window.location.href = "/dashboard";
   }, []);
 
-  useEffect(() => {
-    async function load() {
-      try {
-        const [d, h] = await Promise.all([listDocuments(), health()]);
-        setDocs(d);
-        setServerStatus(h.status);
-        setTotalChats(0);
-        if (d.length > 0) {
-          const latest = d[0];
-          try {
-            const a = await getAnalytics(latest.id);
-            setLatestDocAnalytics({ row_count: a.row_count, column_count: a.column_count });
-            if (a.columns.length > 0) {
-              const c = await getCharts(latest.id, a.columns[0].name);
-              setChartData(c);
-            }
-          } catch {
-            // analytics not available
-          }
-        }
-      } catch {
-        setServerStatus("unreachable");
-      } finally {
-        setLoaded(true);
-      }
-    }
-    load();
-  }, []);
+  const features = [
+    { icon: Brain, title: "Document Intelligence", desc: "Upload PDFs, DOCX, XLSX, and CSV. AURA extracts, chunks, and indexes everything for instant semantic search and Q&A." },
+    { icon: Bot, title: "AI Chat", desc: "Ask questions in natural language. AURA retrieves relevant context and delivers grounded answers with source citations." },
+    { icon: BarChart3, title: "Executive Intelligence", desc: "Get AI-generated executive summaries, key findings, business impact analysis, and strategic implications from your data." },
+    { icon: TrendingUp, title: "Predictive Analytics", desc: "Automatic forecasting with 30/90/365-day projections, anomaly detection, risk scoring, and trend analysis." },
+    { icon: ScrollText, title: "Board Reporting", desc: "Generate professional board-ready PDFs with branded covers, risk matrices, KPI dashboards, and executive briefings." },
+    { icon: Building2, title: "Workspace Collaboration", desc: "Organize documents, reports, and analytics into workspaces. Invite team members with role-based access control." },
+  ];
 
-  const kpis = [
-    {
-      label: "Documents",
-      value: docs.length,
-      icon: FileText,
-      color: "text-blue-400",
-      bg: "bg-blue-600/10",
-      border: "border-blue-800/30",
-    },
-    {
-      label: "Chat Sessions",
-      value: totalChats,
-      icon: MessageSquare,
-      color: "text-emerald-400",
-      bg: "bg-emerald-600/10",
-      border: "border-emerald-800/30",
-    },
-    {
-      label: "Data Rows",
-      value: latestDocAnalytics?.row_count ?? "—",
-      icon: Database,
-      color: "text-purple-400",
-      bg: "bg-purple-600/10",
-      border: "border-purple-800/30",
-    },
-    {
-      label: "Server",
-      value: serverStatus === "ok" ? "Online" : serverStatus || "Checking...",
-      icon: Server,
-      color: serverStatus === "ok" ? "text-emerald-400" : "text-red-400",
-      bg: serverStatus === "ok" ? "bg-emerald-600/10" : "bg-red-600/10",
-      border: serverStatus === "ok" ? "border-emerald-800/30" : "border-red-800/30",
-    },
+  const steps = [
+    { num: "01", title: "Upload Documents", desc: "Drag-and-drop PDF, DOCX, CSV, XLSX, or TXT files." },
+    { num: "02", title: "AI Processing", desc: "Text extraction, chunking, and Gemini-powered embedding." },
+    { num: "03", title: "Executive Intelligence", desc: "Summaries, risks, opportunities, and health scoring." },
+    { num: "04", title: "Forecasting", desc: "Automated projections with confidence intervals." },
+    { num: "05", title: "Board Reports", desc: "Professional PDF reports ready for leadership." },
+  ];
+
+  const industries = [
+    "Finance", "Healthcare", "NGOs", "Government", "Education",
+    "Research", "Consulting", "Manufacturing", "Logistics", "Technology",
+  ];
+
+  const benefits = [
+    { stat: "90%", label: "Faster Reporting", desc: "Reduce reporting time from days to minutes" },
+    { stat: "100%", label: "Centralized Knowledge", desc: "All documents in one searchable platform" },
+    { stat: "10x", label: "Better Decisions", desc: "AI-powered insights for leadership" },
+    { stat: "24/7", label: "Always Available", desc: "Instant analysis on demand" },
   ];
 
   return (
-    <div className="mx-auto max-w-6xl space-y-8 p-8">
-      {/* header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
-          <p className="mt-1 text-sm text-zinc-500">
-            Overview of your AURA workspace
-          </p>
-        </div>
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-600/20">
-          <Sparkles className="h-5 w-5 text-blue-400" />
-        </div>
-      </div>
-
-      {/* KPI cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {kpis.map((kpi) => (
-          <div
-            key={kpi.label}
-            className={`rounded-xl border ${kpi.border} ${kpi.bg} p-5`}
-          >
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-medium uppercase tracking-wider text-zinc-500">
-                {kpi.label}
-              </span>
-              <kpi.icon className={`h-4 w-4 ${kpi.color}`} />
-            </div>
-            <p className={`mt-3 text-3xl font-semibold ${kpi.color}`}>
-              {loaded ? kpi.value : (
-                <span className="inline-block h-7 w-16 animate-pulse rounded bg-zinc-800" />
-              )}
-            </p>
+    <div className="min-h-screen bg-zinc-950 text-zinc-100">
+      {/* Nav */}
+      <nav className="sticky top-0 z-50 border-b border-zinc-800/50 bg-zinc-950/80 backdrop-blur-lg">
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
+          <div className="flex items-center gap-2">
+            <Sparkles className="h-6 w-6 text-blue-400" />
+            <span className="text-lg font-semibold">AURA</span>
           </div>
-        ))}
-      </div>
-
-      {/* charts + recent docs */}
-      <div className="grid gap-6 lg:grid-cols-2">
-        {/* chart section */}
-        <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-5">
-          <h2 className="mb-4 text-sm font-medium uppercase tracking-wider text-zinc-500">
-            Data Overview
-          </h2>
-          {!loaded && (
-            <div className="space-y-3">
-              {[1, 2, 3].map((i) => (
-                <div key={i} className="h-4 w-full animate-pulse rounded bg-zinc-800" />
-              ))}
-            </div>
-          )}
-          {loaded && !chartData && (
-            <div className="flex flex-col items-center justify-center py-12 text-center">
-              <Database className="mb-3 h-8 w-8 text-zinc-700" />
-              <p className="text-sm text-zinc-600">Upload a document to see its chart preview here</p>
-              <Link
-                href="/upload"
-                className="mt-3 flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300"
-              >
-                Go to Upload <ArrowRight className="h-3 w-3" />
-              </Link>
-            </div>
-          )}
-          {chartData?.bar && (
-            <BarChartRenderer data={chartData.bar as Record<string, unknown>} />
-          )}
+          <div className="hidden items-center gap-6 md:flex">
+            <Link href="/login" className="text-sm text-zinc-400 hover:text-zinc-200">Sign In</Link>
+            <Link href="/register" className="rounded-xl bg-blue-600 px-5 py-2 text-sm font-medium hover:bg-blue-500">Get Started Free</Link>
+          </div>
+          <button onClick={() => setMenuOpen(!menuOpen)} className="md:hidden">
+            {menuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+          </button>
         </div>
+        {menuOpen && (
+          <div className="border-t border-zinc-800 px-6 py-4 md:hidden">
+            <div className="flex flex-col gap-3">
+              <Link href="/login" className="text-sm text-zinc-400 hover:text-zinc-200">Sign In</Link>
+              <Link href="/register" className="rounded-xl bg-blue-600 px-5 py-2 text-sm font-medium text-center hover:bg-blue-500">Get Started Free</Link>
+            </div>
+          </div>
+        )}
+      </nav>
 
-        {/* recent documents */}
-        <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-5">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-sm font-medium uppercase tracking-wider text-zinc-500">
-              Recent Documents
-            </h2>
-            <Link
-              href="/upload"
-              className="text-xs text-zinc-600 hover:text-zinc-400"
-            >
-              View all
+      {/* Hero */}
+      <section className="relative overflow-hidden border-b border-zinc-800/50">
+        <div className="absolute inset-0 bg-gradient-to-b from-blue-600/5 via-transparent to-transparent" />
+        <div className="mx-auto max-w-7xl px-6 py-24 text-center">
+          <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-blue-800/30 bg-blue-950/30 px-4 py-1.5 text-xs text-blue-300">
+            <Sparkles className="h-3.5 w-3.5" />
+            Enterprise Intelligence Platform — Now Available
+          </div>
+          <h1 className="bg-gradient-to-r from-white via-zinc-200 to-zinc-400 bg-clip-text text-5xl font-bold leading-tight text-transparent sm:text-6xl">
+            AI-Powered Executive<br />Intelligence Platform
+          </h1>
+          <p className="mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-zinc-400">
+            Transform documents, reports, spreadsheets, and operational data into
+            executive-ready insights, forecasts, recommendations, and board-level reports.
+          </p>
+          <div className="mt-10 flex items-center justify-center gap-4">
+            <Link href="/register" className="rounded-xl bg-blue-600 px-8 py-3 text-sm font-medium hover:bg-blue-500 shadow-lg shadow-blue-600/25">
+              Get Started Free
+            </Link>
+            <Link href="/login" className="rounded-xl border border-zinc-700 px-8 py-3 text-sm font-medium text-zinc-300 hover:bg-zinc-800/50">
+              Sign In
             </Link>
           </div>
-          {!loaded && (
-            <div className="space-y-3">
-              {[1, 2, 3].map((i) => (
-                <div key={i} className="h-12 w-full animate-pulse rounded-lg bg-zinc-800" />
-              ))}
-            </div>
-          )}
-          {loaded && docs.length === 0 && (
-            <div className="flex flex-col items-center justify-center py-12 text-center">
-              <FileText className="mb-3 h-8 w-8 text-zinc-700" />
-              <p className="text-sm text-zinc-600">No documents uploaded yet</p>
-              <Link
-                href="/upload"
-                className="mt-3 flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300"
-              >
-                Upload your first document <ArrowRight className="h-3 w-3" />
-              </Link>
-            </div>
-          )}
-          {loaded && docs.length > 0 && (
-            <div className="space-y-2">
-              {docs.slice(0, 5).map((doc) => (
-                <div
-                  key={doc.id}
-                  className="flex items-center gap-3 rounded-lg border border-zinc-800/50 px-4 py-3 transition-colors hover:border-zinc-700"
-                >
-                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-zinc-800">
-                    <FileText className="h-4 w-4 text-zinc-400" />
+          {/* Dashboard preview */}
+          <div className="mt-16 mx-auto max-w-5xl rounded-2xl border border-zinc-800 bg-zinc-900/70 p-1 shadow-2xl shadow-blue-600/5">
+            <div className="rounded-xl bg-zinc-900 p-4">
+              <div className="grid gap-3 sm:grid-cols-5 mb-4">
+                {[
+                  { label: "Business Health", value: "84/100", color: "text-emerald-400" },
+                  { label: "Active Reports", value: "12", color: "text-blue-400" },
+                  { label: "Documents", value: "47", color: "text-purple-400" },
+                  { label: "Forecasts", value: "8", color: "text-amber-400" },
+                  { label: "Confidence", value: "92%", color: "text-emerald-400" },
+                ].map((s, i) => (
+                  <div key={i} className="rounded-lg bg-zinc-800/50 p-3 text-center">
+                    <p className="text-xs text-zinc-500">{s.label}</p>
+                    <p className={`text-xl font-bold ${s.color}`}>{s.value}</p>
                   </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium">{doc.title}</p>
-                    <p className="text-xs text-zinc-600">
-                      {new Date(doc.created_at).toLocaleDateString()}
-                    </p>
+                ))}
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="rounded-lg bg-zinc-800/30 p-3">
+                  <p className="text-xs font-medium uppercase tracking-wider text-zinc-500 mb-2">Executive Summary</p>
+                  <p className="text-xs text-zinc-300 leading-relaxed">Revenue increased 12% quarter-over-quarter. Operational performance remains stable. Primary risk is supplier concentration.</p>
+                </div>
+                <div className="rounded-lg bg-zinc-800/30 p-3">
+                  <p className="text-xs font-medium uppercase tracking-wider text-zinc-500 mb-2">Top Recommendations</p>
+                  <div className="space-y-1">
+                    {["Diversify supplier base", "Expand in high-growth regions", "Optimize operational costs"].map((r, i) => (
+                      <div key={i} className="flex items-center gap-1.5 text-xs text-zinc-400"><ChevronRight className="h-3 w-3 text-blue-400" />{r}</div>
+                    ))}
                   </div>
-                  <span className="shrink-0 text-xs text-zinc-600">
-                    {doc.content.length.toLocaleString()} chars
-                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* What AURA Does */}
+      <section className="mx-auto max-w-7xl px-6 py-24">
+        <div className="text-center mb-16">
+          <h2 className="text-3xl font-bold">What AURA Does</h2>
+          <p className="mt-3 text-zinc-400">From document upload to executive decision support in one platform</p>
+        </div>
+        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          {features.map((f, i) => (
+            <div key={i} className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-6 hover:border-zinc-700 transition-colors">
+              <f.icon className="h-8 w-8 text-blue-400 mb-3" />
+              <h3 className="text-sm font-semibold mb-2">{f.title}</h3>
+              <p className="text-xs text-zinc-400 leading-relaxed">{f.desc}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* How It Works */}
+      <section className="border-t border-zinc-800/50 bg-zinc-900/20">
+        <div className="mx-auto max-w-7xl px-6 py-24">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl font-bold">How AURA Works</h2>
+            <p className="mt-3 text-zinc-400">From upload to decision in minutes, not days</p>
+          </div>
+          <div className="relative">
+            <div className="absolute left-8 top-0 h-full w-px bg-gradient-to-b from-blue-500 via-zinc-700 to-transparent hidden md:block" />
+            <div className="space-y-12">
+              {steps.map((s, i) => (
+                <div key={i} className="relative flex items-start gap-8">
+                  <div className="hidden md:flex h-16 w-16 shrink-0 items-center justify-center rounded-full border border-zinc-700 bg-zinc-900 text-sm font-bold text-blue-400">
+                    {s.num}
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="text-lg font-semibold">{s.title}</h3>
+                    <p className="mt-1 text-sm text-zinc-400">{s.desc}</p>
+                  </div>
                 </div>
               ))}
             </div>
-          )}
-        </div>
-      </div>
-
-      {/* quick stats row */}
-      {latestDocAnalytics && (
-        <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-5">
-          <h2 className="mb-4 text-sm font-medium uppercase tracking-wider text-zinc-500">
-            Latest Document Stats
-          </h2>
-          <div className="grid gap-4 sm:grid-cols-3">
-            <div className="rounded-lg bg-zinc-900/60 px-4 py-3">
-              <p className="text-xs text-zinc-500">Rows</p>
-              <p className="mt-1 text-xl font-semibold">{latestDocAnalytics.row_count}</p>
-            </div>
-            <div className="rounded-lg bg-zinc-900/60 px-4 py-3">
-              <p className="text-xs text-zinc-500">Columns</p>
-              <p className="mt-1 text-xl font-semibold">{latestDocAnalytics.column_count}</p>
-            </div>
-            <div className="rounded-lg bg-zinc-900/60 px-4 py-3">
-              <p className="text-xs text-zinc-500">Total Chars</p>
-              <p className="mt-1 text-xl font-semibold">
-                {docs[0]?.content.length.toLocaleString() ?? "—"}
-              </p>
-            </div>
           </div>
         </div>
-      )}
-    </div>
-  );
-}
+      </section>
 
-function BarChartRenderer({ data }: { data: Record<string, unknown> | undefined }) {
-  if (!data) return <p className="text-sm text-zinc-600">No chart data</p>;
-  const plotlyData = (data.data as Record<string, unknown>[]);
-  if (!plotlyData?.length) return <p className="text-sm text-zinc-600">No chart data</p>;
-  const trace = plotlyData[0];
-  const labels = (trace?.x as string[]) ?? [];
-  const values = (trace?.y as number[]) ?? [];
-  const maxVal = Math.max(...values, 1);
-
-  const colors = ["#636efa", "#ef553b", "#00cc96", "#ab63fa", "#ffa15a", "#19d3f3"];
-
-  return (
-    <div className="space-y-2">
-      {labels.slice(0, 8).map((label, i) => (
-        <div key={label} className="flex items-center gap-3 text-xs">
-          <span className="w-24 truncate text-zinc-400">{label}</span>
-          <div className="flex-1 overflow-hidden rounded-full bg-zinc-800">
-            <div
-              className="h-3 rounded-full transition-all"
-              style={{
-                width: `${(values[i] / maxVal) * 100}%`,
-                backgroundColor: colors[i % colors.length],
-              }}
-            />
-          </div>
-          <span className="w-8 text-right text-zinc-300">{values[i]}</span>
+      {/* Benefits */}
+      <section className="mx-auto max-w-7xl px-6 py-24">
+        <div className="text-center mb-16">
+          <h2 className="text-3xl font-bold">Measurable Outcomes</h2>
         </div>
-      ))}
+        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+          {benefits.map((b, i) => (
+            <div key={i} className="text-center rounded-xl border border-zinc-800 bg-zinc-900/50 p-8">
+              <p className="text-4xl font-bold text-blue-400">{b.stat}</p>
+              <p className="mt-2 text-sm font-semibold">{b.label}</p>
+              <p className="mt-1 text-xs text-zinc-500">{b.desc}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Industries */}
+      <section className="border-t border-zinc-800/50 bg-zinc-900/20">
+        <div className="mx-auto max-w-7xl px-6 py-24">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl font-bold">Built for Every Industry</h2>
+            <p className="mt-3 text-zinc-400">Trusted by organizations across sectors</p>
+          </div>
+          <div className="flex flex-wrap justify-center gap-3">
+            {industries.map((ind, i) => (
+              <div key={i} className="rounded-xl border border-zinc-800 bg-zinc-900/50 px-5 py-3 text-sm text-zinc-300">
+                {ind}
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* CTA */}
+      <section className="mx-auto max-w-4xl px-6 py-24 text-center">
+        <div className="rounded-2xl border border-zinc-800 bg-gradient-to-b from-zinc-900 to-zinc-950 p-12">
+          <h2 className="text-3xl font-bold">Ready to transform your organization&apos;s intelligence?</h2>
+          <p className="mt-3 text-zinc-400">Join organizations using AURA to make better decisions faster.</p>
+          <div className="mt-8 flex items-center justify-center gap-4">
+            <Link href="/register" className="rounded-xl bg-blue-600 px-8 py-3 text-sm font-medium hover:bg-blue-500">Create Account</Link>
+            <Link href="/login" className="rounded-xl border border-zinc-700 px-8 py-3 text-sm font-medium text-zinc-300 hover:bg-zinc-800/50">Sign In</Link>
+          </div>
+        </div>
+      </section>
+
+      {/* Footer */}
+      <footer className="border-t border-zinc-800/50 px-6 py-8">
+        <div className="mx-auto flex max-w-7xl items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Sparkles className="h-5 w-5 text-blue-400" />
+            <span className="text-sm font-semibold">AURA</span>
+          </div>
+          <p className="text-xs text-zinc-600">Enterprise Intelligence Platform</p>
+        </div>
+      </footer>
     </div>
   );
 }

@@ -47,8 +47,7 @@ def decode_token(token: str) -> dict:
         raise HTTPException(status_code=401, detail="Invalid token")
 
 
-async def register_user(email: str, password: str, full_name: str = "") -> dict:
-    settings = get_settings()
+async def register_user(email: str, password: str, full_name: str = "", organization_name: str = "") -> dict:
     async with get_session_factory()() as db:
         existing = await db.execute(select(User).where(User.email == email))
         if existing.scalar_one_or_none():
@@ -65,7 +64,10 @@ async def register_user(email: str, password: str, full_name: str = "") -> dict:
         await db.refresh(user)
 
         from app.models.organization import Organization
-        org = Organization(name=f"{user.full_name}'s Organization", owner_id=user.id)
+        from app.models.workspace import Workspace, WorkspaceMember
+
+        org_name = organization_name or f"{user.full_name}'s Organization"
+        org = Organization(name=org_name, owner_id=user.id)
         db.add(org)
         await db.commit()
         await db.refresh(org)
@@ -73,10 +75,19 @@ async def register_user(email: str, password: str, full_name: str = "") -> dict:
         user.organization_id = org.id
         await db.commit()
 
+        ws = Workspace(name="General", description="Default workspace", organization_id=org.id, created_by=user.id)
+        db.add(ws)
+        await db.commit()
+        await db.refresh(ws)
+
+        member = WorkspaceMember(workspace_id=ws.id, user_id=user.id, role="admin")
+        db.add(member)
+        await db.commit()
+
         access = create_access_token(user.id, user.role, org.id)
         refresh = create_refresh_token(user.id)
         return {"access_token": access, "refresh_token": refresh, "token_type": "bearer",
-                "user": {"id": user.id, "email": user.email, "full_name": user.full_name, "role": user.role}}
+                "user": {"id": user.id, "email": user.email, "full_name": user.full_name, "role": user.role, "organization_id": org.id}}
 
 
 async def login_user(email: str, password: str) -> dict:
