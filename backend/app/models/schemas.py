@@ -340,3 +340,49 @@ class ExecutiveBriefingResponse(BaseModel):
     forecast_outlook: str
     recommended_actions: list[str]
     confidence: float
+
+
+# --- Milestone 3 Schemas ---
+
+class ExecutiveIntelligenceRequest(BaseModel):
+    doc_ids: list[int]
+
+
+class RiskItem(BaseModel):
+    name: str
+    description: str
+    category: str
+    severity: str
+    probability: str
+    potential_impact: str
+    mitigation: str
+
+
+class OpportunityItem(BaseModel):
+    name: str
+    description: str
+    category: str
+    expected_impact: str
+    priority: str
+    confidence: float
+    recommended_action: str
+
+
+class RecommendationAction(BaseModel):
+    title: str
+    reasoning: str
+    expected_benefit: str
+    priority: str
+    implementation_difficulty: str
+    confidence: float
+
+
+class ExecutiveIntelligenceResponse(BaseModel):
+    executive_summary: dict
+    business_health: dict
+    risks: list[RiskItem]
+    opportunities: list[OpportunityItem]
+    recommendations: list[RecommendationAction]
+    sources: list[str]
+    confidence_scores: dict
+    overall_confidence: float
