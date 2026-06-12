@@ -41,6 +41,9 @@ async def _run_migrations(conn):
         "ALTER TABLE documents ADD COLUMN IF NOT EXISTS processing_status VARCHAR(20) DEFAULT 'pending'",
         "ALTER TABLE documents ADD COLUMN IF NOT EXISTS chunk_count INTEGER DEFAULT 0",
         "ALTER TABLE documents ADD COLUMN IF NOT EXISTS page_count INTEGER DEFAULT 0",
+        "ALTER TABLE documents ADD COLUMN IF NOT EXISTS workspace_id INTEGER",
+        "ALTER TABLE documents ADD COLUMN IF NOT EXISTS organization_id INTEGER",
+        "ALTER TABLE documents ADD COLUMN IF NOT EXISTS uploaded_by INTEGER",
     ]
     for stmt in migrations:
         try:

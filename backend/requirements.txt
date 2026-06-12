@@ -23,3 +23,6 @@ pandas>=2.0.0
 plotly>=5.18.0
 fpdf2>=2.7.0
 kaleido>=0.2.0
+pyjwt>=2.13.0
+passlib>=1.7.4
+bcrypt>=4.0.0
