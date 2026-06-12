@@ -22,7 +22,7 @@ def _build_chat_prompt(messages: list[ChatMessage]) -> list[dict]:
 async def chat_with_history(messages: list[ChatMessage]) -> ChatResponse:
     try:
         prompt = _build_chat_prompt(messages)
-        reply = await generate_response_async(prompt)
+        reply = await generate_response_async(prompt, request_type="chat")
         return ChatResponse(reply=reply)
     except Exception as e:
         logger.warning("Chat AI call failed: %s", e)
