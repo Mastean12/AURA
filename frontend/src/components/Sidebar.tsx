@@ -35,7 +35,6 @@ const navGroups = [
     label: "Reports",
     items: [
       { href: "/reports", label: "Executive Briefings", icon: ScrollText },
-      { href: "/reports", label: "Board Reports", icon: FileText },
     ],
   },
   {
