@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import {
   FileText,
   MessageSquare,
@@ -14,6 +15,7 @@ import { listDocuments, health, getAnalytics, getCharts } from "@/lib/api";
 import type { DocumentResponse, ChartsResponse } from "@/types";
 
 export default function Dashboard() {
+  const router = useRouter();
   const [docs, setDocs] = useState<DocumentResponse[]>([]);
   const [serverStatus, setServerStatus] = useState<string>("");
   const [totalChats, setTotalChats] = useState(0);
@@ -23,6 +25,14 @@ export default function Dashboard() {
   } | null>(null);
   const [chartData, setChartData] = useState<ChartsResponse | null>(null);
   const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    const token = localStorage.getItem("aura_token");
+    if (!token) {
+      router.push("/login");
+      return;
+    }
+  }, []);
 
   useEffect(() => {
     async function load() {
