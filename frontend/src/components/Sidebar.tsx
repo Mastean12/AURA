@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import {
   LayoutDashboard, Sparkles, Upload, MessageSquare, BarChart3,
   TrendingUp, Building2, Brain, FileText, ScrollText, Shield,
-  Users, Settings, AlertTriangle, Target,
+  Users, Settings, AlertTriangle, Target, CreditCard,
 } from "lucide-react";
 
 const navGroups = [
@@ -43,6 +43,7 @@ const navGroups = [
       { href: "/users", label: "User Management", icon: Users },
       { href: "/organization/settings", label: "Organization Settings", icon: Building2 },
       { href: "/workspace/settings", label: "Workspace Settings", icon: Settings },
+      { href: "/billing", label: "Billing", icon: CreditCard },
       { href: "/admin/ai-monitoring", label: "AI Monitoring", icon: Shield },
     ],
   },
