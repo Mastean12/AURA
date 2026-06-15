@@ -272,15 +272,22 @@ async def invite_by_email(ws_id: int, payload: WorkspaceInviteByEmail, user: dic
         return {"detail": "You are already a member of this workspace."}
 
     ws_name = "the workspace"
+    org_name = "your organization"
+
     async with get_session_factory()() as db:
+        from app.models.organization import Organization
         ws_result = await db.execute(select(Workspace).where(Workspace.id == ws_id))
         ws = ws_result.scalar_one_or_none()
         if ws:
             ws_name = ws.name
+            org = await db.execute(select(Organization).where(Organization.id == ws.organization_id))
+            org_obj = org.scalar_one_or_none()
+            if org_obj:
+                org_name = org_obj.name
 
         target = (await db.execute(select(User).where(User.email.ilike(email)))).scalar_one_or_none()
         if not target:
-            await send_workspace_invite(email, user["full_name"], ws_name, "http://localhost:3000/register")
+            await send_workspace_invite(email, user["full_name"], ws_name, payload.role, org_name, "http://localhost:3000/register")
             return {"detail": f"Invitation sent to {email}. They need to create an account first."}
 
         existing = await db.execute(
@@ -295,7 +302,7 @@ async def invite_by_email(ws_id: int, payload: WorkspaceInviteByEmail, user: dic
         await db.commit()
 
     login_url = "http://localhost:3000/login"
-    await send_workspace_invite(email, user["full_name"], ws_name, login_url)
+    await send_workspace_invite(email, user["full_name"], ws_name, payload.role, org_name, login_url)
     return {"detail": f"Invitation sent to {email}"}
 
 
