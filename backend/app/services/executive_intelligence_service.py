@@ -39,11 +39,14 @@ async def generate_executive_intelligence(doc_ids: list[int]) -> dict:
         opps_result.get("sources", [])
     ))
 
+    def _to_01(val: float) -> float:
+        return round(val / 100, 2) if val > 1 else round(val, 2)
+
     confidence_scores = {
-        "summary": summary_result.get("confidence", 0),
-        "risks": risks_result.get("confidence", 0),
-        "opportunities": opps_result.get("confidence", 0),
-        "business_health": health_result.get("overall", 0),
+        "summary": _to_01(summary_result.get("confidence", 0)),
+        "risks": _to_01(risks_result.get("confidence", 0)),
+        "opportunities": _to_01(opps_result.get("confidence", 0)),
+        "business_health": _to_01(health_result.get("overall", 0) or 0),
         "recommendations": round(sum(r.get("confidence", 0) for r in recs) / len(recs), 2) if recs else 0,
     }
 
