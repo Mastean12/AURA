@@ -265,30 +265,38 @@ async def invite_by_email(ws_id: int, payload: WorkspaceInviteByEmail, user: dic
     await _verify_workspace_access(ws_id, user, min_role="workspace_admin")
     if payload.role not in WORKSPACE_ROLES:
         raise HTTPException(status_code=400, detail=f"Invalid role. Choose: {WORKSPACE_ROLES}")
+
+    email = payload.email.strip().lower()
+
+    if email == user["email"].lower():
+        return {"detail": "You are already a member of this workspace."}
+
+    ws_name = "the workspace"
     async with get_session_factory()() as db:
-        found = await db.execute(select(User).where(User.email == payload.email))
-        target = found.scalar_one_or_none()
+        ws_result = await db.execute(select(Workspace).where(Workspace.id == ws_id))
+        ws = ws_result.scalar_one_or_none()
+        if ws:
+            ws_name = ws.name
+
+        target = (await db.execute(select(User).where(User.email.ilike(email)))).scalar_one_or_none()
         if not target:
-            existing = await db.execute(
-                select(WorkspaceMember, User).join(User, WorkspaceMember.user_id == User.id)
-                .where(WorkspaceMember.workspace_id == ws_id, User.email == payload.email)
-            )
-            if existing.first():
-                raise HTTPException(status_code=400, detail="User already a member")
-            raise HTTPException(status_code=404, detail=f"No user found with email {payload.email}")
+            await send_workspace_invite(email, user["full_name"], ws_name, "http://localhost:3000/register")
+            return {"detail": f"Invitation sent to {email}. They need to create an account first."}
+
         existing = await db.execute(
             select(WorkspaceMember).where(
                 WorkspaceMember.workspace_id == ws_id, WorkspaceMember.user_id == target.id
             )
         )
         if existing.scalar_one_or_none():
-            raise HTTPException(status_code=400, detail="User already a member")
+            return {"detail": f"{target.full_name or target.email} is already a member of {ws_name}."}
+
         db.add(WorkspaceMember(workspace_id=ws_id, user_id=target.id, role=payload.role))
         await db.commit()
-    ws_name = f"workspace #{ws_id}"
+
     login_url = "http://localhost:3000/login"
-    await send_workspace_invite(payload.email, user["full_name"], ws_name, login_url)
-    return {"detail": f"Invitation sent to {payload.email}"}
+    await send_workspace_invite(email, user["full_name"], ws_name, login_url)
+    return {"detail": f"Invitation sent to {email}"}
 
 
 @router.put("/{ws_id}/members/{user_id}")
