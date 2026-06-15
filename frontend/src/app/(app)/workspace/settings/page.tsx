@@ -42,8 +42,10 @@ export default function WorkspaceSettingsPage() {
   const [newName, setNewName] = useState("");
   const [newDesc, setNewDesc] = useState("");
   const [newType, setNewType] = useState("department");
-  const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteRole, setInviteRole] = useState("analyst");
+  const [addRole, setAddRole] = useState("analyst");
+  const [availableUsers, setAvailableUsers] = useState<{id: number; full_name: string; email: string}[]>([]);
+  const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
+  const [showAddMember, setShowAddMember] = useState(false);
 
   useEffect(() => {
     listWorkspaces().then(wss => {
@@ -116,20 +118,33 @@ export default function WorkspaceSettingsPage() {
     } catch { showNotification("Create failed"); }
   }
 
-  async function handleInviteByEmail() {
-    if (!selectedId || !inviteEmail) return;
+  async function loadAvailableUsers() {
+    if (!selectedId) return;
+    const token = localStorage.getItem("aura_token");
     try {
-      const token = localStorage.getItem("aura_token");
       const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/v1/workspaces/${selectedId}/invite-by-email`,
-        { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ email: inviteEmail, role: inviteRole }) }
+        `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/v1/workspaces/${selectedId}/available-users`,
+        { headers: { Authorization: `Bearer ${token}` } }
       );
-      if (!res.ok) { const err = await res.json(); showNotification(err.detail || "Invite failed"); return; }
-      showNotification(`Invitation sent to ${inviteEmail}`);
-      setInviteEmail("");
+      setAvailableUsers(await res.json());
+    } catch {}
+  }
+
+  async function handleAddMember() {
+    if (!selectedId || !selectedUserId) return;
+    const token = localStorage.getItem("aura_token");
+    try {
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/v1/workspaces/${selectedId}/members`,
+        { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ user_id: selectedUserId, role: addRole }) }
+      );
+      const data = await res.json();
+      showNotification(data.detail || "Member added");
+      setSelectedUserId(null);
+      setShowAddMember(false);
       loadWorkspace(selectedId);
-    } catch { showNotification("Invite failed"); }
+    } catch { showNotification("Failed to add member"); }
   }
 
   async function handleRoleChange(userId: number, role: string) {
@@ -334,19 +349,35 @@ export default function WorkspaceSettingsPage() {
                 <h2 className="text-sm font-medium uppercase tracking-wider text-zinc-500">Members ({data.members.length})</h2>
               </div>
 
-              <div className="mb-4 flex gap-2">
-                <input value={inviteEmail} onChange={e => setInviteEmail(e.target.value)}
-                  placeholder="Enter email address to invite"
-                  className="flex-1 rounded-lg border border-zinc-800 bg-zinc-900/70 px-3 py-2 text-xs text-zinc-100 placeholder-zinc-600 outline-none focus:border-blue-600" />
-                <select value={inviteRole} onChange={e => setInviteRole(e.target.value)}
-                  className="rounded-lg border border-zinc-800 bg-zinc-900/70 px-3 py-2 text-xs text-zinc-300 outline-none focus:border-blue-600">
-                  <option value="workspace_admin">Admin</option><option value="manager">Manager</option>
-                  <option value="analyst">Analyst</option><option value="viewer">Viewer</option>
-                </select>
-                <button onClick={handleInviteByEmail}
-                  className="flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-2 text-xs font-medium hover:bg-blue-500">
-                  <Mail className="h-3.5 w-3.5" />Invite
-                </button>
+              <div className="mb-4">
+                {showAddMember ? (
+                  <div className="flex gap-2">
+                    <select value={selectedUserId ?? ""} onChange={e => setSelectedUserId(Number(e.target.value) || null)}
+                      className="flex-1 rounded-lg border border-zinc-800 bg-zinc-900/70 px-3 py-2 text-xs text-zinc-300 outline-none focus:border-blue-600"
+                      onFocus={loadAvailableUsers}>
+                      <option value="">Select a user to add...</option>
+                      {availableUsers.map(u => (
+                        <option key={u.id} value={u.id}>{u.full_name} ({u.email})</option>
+                      ))}
+                    </select>
+                    <select value={addRole} onChange={e => setAddRole(e.target.value)}
+                      className="rounded-lg border border-zinc-800 bg-zinc-900/70 px-3 py-2 text-xs text-zinc-300 outline-none focus:border-blue-600">
+                      <option value="workspace_admin">Admin</option><option value="manager">Manager</option>
+                      <option value="analyst">Analyst</option><option value="viewer">Viewer</option>
+                    </select>
+                    <button onClick={handleAddMember} disabled={!selectedUserId}
+                      className="flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-2 text-xs font-medium hover:bg-blue-500 disabled:opacity-50">
+                      <Plus className="h-3.5 w-3.5" />Add
+                    </button>
+                    <button onClick={() => setShowAddMember(false)}
+                      className="rounded-lg border border-zinc-800 px-3 py-2 text-xs text-zinc-500 hover:text-zinc-300">Cancel</button>
+                  </div>
+                ) : (
+                  <button onClick={() => { setShowAddMember(true); loadAvailableUsers(); }}
+                    className="flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-2 text-xs font-medium hover:bg-blue-500">
+                    <Plus className="h-3.5 w-3.5" />Add Existing User
+                  </button>
+                )}
               </div>
 
               <div className="overflow-x-auto">
