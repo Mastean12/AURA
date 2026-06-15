@@ -416,3 +416,55 @@ export async function getExecutiveBriefing(doc_id: number, company_name: string 
   });
   return res.json();
 }
+
+// --- Workspace API ---
+
+export async function createWorkspace(payload: { name: string; description?: string; workspace_type?: string }) {
+  const res = await apiFetch(`${API_BASE}/workspaces/`, { method: "POST", body: JSON.stringify(payload) });
+  return res.json();
+}
+
+export async function listWorkspaces() {
+  const res = await apiFetch(`${API_BASE}/workspaces/`);
+  return res.json();
+}
+
+export async function getWorkspace(wsId: number) {
+  const res = await apiFetch(`${API_BASE}/workspaces/${wsId}`);
+  return res.json();
+}
+
+export async function updateWorkspace(wsId: number, payload: Record<string, unknown>) {
+  const res = await apiFetch(`${API_BASE}/workspaces/${wsId}`, { method: "PUT", body: JSON.stringify(payload) });
+  return res.json();
+}
+
+export async function deleteWorkspace(wsId: number) {
+  const res = await apiFetch(`${API_BASE}/workspaces/${wsId}`, { method: "DELETE" });
+  return res.json();
+}
+
+export async function addWorkspaceMember(wsId: number, userId: number, role: string = "analyst") {
+  const res = await apiFetch(`${API_BASE}/workspaces/${wsId}/members`, { method: "POST", body: JSON.stringify({ user_id: userId, role }) });
+  return res.json();
+}
+
+export async function updateMemberRole(wsId: number, userId: number, role: string) {
+  const res = await apiFetch(`${API_BASE}/workspaces/${wsId}/members/${userId}`, { method: "PUT", body: JSON.stringify({ role }) });
+  return res.json();
+}
+
+export async function removeMember(wsId: number, userId: number) {
+  const res = await apiFetch(`${API_BASE}/workspaces/${wsId}/members/${userId}`, { method: "DELETE" });
+  return res.json();
+}
+
+export async function getWorkspaceSettings(wsId: number) {
+  const res = await apiFetch(`${API_BASE}/workspaces/${wsId}/settings`);
+  return res.json();
+}
+
+export async function updateWorkspaceSettings(wsId: number, payload: Record<string, unknown>) {
+  const res = await apiFetch(`${API_BASE}/workspaces/${wsId}/settings`, { method: "PUT", body: JSON.stringify(payload) });
+  return res.json();
+}
