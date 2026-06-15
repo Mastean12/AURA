@@ -25,22 +25,41 @@ import type {
   ExecutiveBriefingResponse,
 } from "@/types";
 
+function authHeaders(): Record<string, string> {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (typeof window !== "undefined") {
+    const token = localStorage.getItem("aura_token");
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+  }
+  return headers;
+}
+
 function log(level: "info" | "error", msg: string, data?: unknown) {
-  if (level === "info") console.log(`[API] ${msg}`, data ?? "");
-  else console.error(`[API] ${msg}`, data ?? "");
+  if (process.env.NODE_ENV !== "production") {
+    if (level === "info") console.log(`[API] ${msg}`, data ?? "");
+    else console.error(`[API] ${msg}`, data ?? "");
+  }
+}
+
+async function apiFetch(url: string, options: RequestInit = {}): Promise<Response> {
+  const res = await fetch(url, {
+    ...options,
+    headers: { ...authHeaders(), ...(options.headers as Record<string, string> || {}) },
+  });
+  if (!res.ok) {
+    const errBody = await res.text().catch(() => "");
+    throw new Error(`API ${res.status}: ${errBody.slice(0, 200)}`);
+  }
+  return res;
 }
 
 export async function chat(messages: ChatMessage[]): Promise<ChatResponse> {
   const url = `${API_BASE}/chat/`;
-  log("info", "POST", url);
-  const res = await fetch(url, {
+  const res = await apiFetch(url, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ messages }),
   });
-  const data = await res.json();
-  log("info", "Response", { status: res.status, data });
-  return data;
+  return res.json();
 }
 
 export async function query(payload: {
@@ -48,16 +67,11 @@ export async function query(payload: {
   k?: number;
   session_id?: string;
 }): Promise<QueryResponse> {
-  const url = `${API_BASE}/chat/query`;
-  log("info", "POST", url);
-  const res = await fetch(url, {
+  const res = await apiFetch(`${API_BASE}/chat/query`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
-  const data = await res.json();
-  log("info", "Response", { status: res.status, data });
-  return data;
+  return res.json();
 }
 
 export async function queryDocuments(payload: {

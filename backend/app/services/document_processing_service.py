@@ -6,24 +6,11 @@ from app.models.document import Document
 from app.services.document_parser import extract_text, extract_metadata, save_upload
 from app.services.chunking_service import chunk_text as create_chunks
 from app.services.embedding_service import store_chunk_vectors, set_embedding_status
-from app.services.document_service import store_chunks
+from app.services.document_service import store_chunks, classify_file_type
 from app.config import get_settings
 from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
-
-
-def classify_file_type(filename: str) -> str:
-    ext = filename.lower().rsplit(".", 1)[-1] if "." in filename else ""
-    if ext == "pdf":
-        return "PDF"
-    elif ext in ("doc", "docx"):
-        return "Word"
-    elif ext in ("xls", "xlsx", "csv"):
-        return "Excel"
-    elif ext == "txt":
-        return "Text"
-    return "Other"
 
 
 async def process_document(content_bytes: bytes, filename: str) -> int | None:

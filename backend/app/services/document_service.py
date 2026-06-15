@@ -15,6 +15,8 @@ def classify_file_type(filename: str) -> str:
         return "Word"
     elif ext in ("xls", "xlsx", "csv"):
         return "Excel"
+    elif ext == "txt":
+        return "Text"
     return "Other"
 
 

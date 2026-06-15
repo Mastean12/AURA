@@ -5,6 +5,7 @@ import tempfile
 from datetime import datetime
 from pathlib import Path
 
+import pandas as pd
 import plotly.graph_objects as go
 from fpdf import FPDF
 
@@ -62,9 +63,9 @@ async def generate_report(doc_id: int) -> bytes:
         analytics = await get_analytics(doc_id)
         if analytics and analytics.columns:
             first_col = analytics.columns[0].name
-            charts = generate_charts(doc_id, first_col) or {}
+            charts = await _generate_charts(doc_id, first_col) or {}
             charts["correlation"] = _correlation_heatmap(
-                __import__("pandas").read_csv(io.StringIO(doc.content)) if doc else None
+                pd.read_csv(io.StringIO(doc.content)) if doc else None
             ) if doc else None
     except Exception as e:
         logger.warning("Analytics/charts failed: %s", e)

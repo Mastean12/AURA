@@ -39,7 +39,7 @@ export default function AppHeader({ onToggleSidebar }: { onToggleSidebar?: () =>
     if (stored) setUser(JSON.parse(stored));
 
     if (token) {
-      fetch("http://localhost:8000/api/v1/workspaces/", {
+      fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/v1/workspaces/`, {
         headers: { Authorization: `Bearer ${token}` },
       })
         .then(r => r.json())

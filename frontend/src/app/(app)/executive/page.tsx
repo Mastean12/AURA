@@ -74,7 +74,7 @@ export default function ExecutivePage() {
     if (selectedIds.length === 0) return;
     setLoading(true);
     try {
-      const res = await fetch("http://localhost:8000/api/v1/analytics/executive-intelligence", {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/v1/analytics/executive-intelligence`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ doc_ids: selectedIds }),

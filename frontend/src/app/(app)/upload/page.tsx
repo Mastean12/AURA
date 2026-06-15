@@ -92,7 +92,7 @@ export default function UploadPage() {
     setBatchDeleting(true);
     const ids = Array.from(selectedIds);
     try {
-      const res = await fetch(`http://localhost:8000/api/v1/documents/batch-delete`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/v1/documents/batch-delete`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ doc_ids: ids }),

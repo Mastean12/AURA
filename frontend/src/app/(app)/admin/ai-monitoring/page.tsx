@@ -45,7 +45,7 @@ export default function AIMonitoringPage() {
   async function fetchData() {
     setLoading(true);
     try {
-      const res = await fetch("http://localhost:8000/api/v1/admin/ai-monitoring");
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/v1/admin/ai-monitoring`);
       const json = await res.json();
       setData(json);
     } catch {

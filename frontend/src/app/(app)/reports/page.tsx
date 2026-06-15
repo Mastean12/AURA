@@ -73,7 +73,7 @@ export default function ReportsPage() {
       if (reportType === "analytics-export") {
         blob = await exportReport(selectedIds[0]);
       } else {
-        const url = `http://localhost:8000/api/v1/reports/${reportType}`;
+        const url = `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/v1/reports/${reportType}`;
         const res = await fetch(url, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
