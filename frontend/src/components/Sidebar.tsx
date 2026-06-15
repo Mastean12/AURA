@@ -40,6 +40,7 @@ const navGroups = [
   {
     label: "Administration",
     items: [
+      { href: "/organization/settings", label: "Organization Settings", icon: Building2 },
       { href: "/workspace/settings", label: "Workspace Settings", icon: Settings },
       { href: "/admin/ai-monitoring", label: "AI Monitoring", icon: Shield },
     ],

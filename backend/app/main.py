@@ -20,10 +20,11 @@ from app.api.admin import router as admin_router
 from app.api.executive import router as executive_router
 from app.api.auth import router as auth_router
 from app.api.workspaces import router as workspaces_router
+from app.api.organization import router as organization_router
 
 # Import all models so SQLAlchemy metadata registers them for create_all
 from app.models.user import User  # noqa: F401
-from app.models.organization import Organization  # noqa: F401
+from app.models.organization import Organization, OrganizationSecurity, OrganizationAIConfig, OrganizationDataGovernance  # noqa: F401
 from app.models.workspace import Workspace, WorkspaceMember  # noqa: F401
 from app.models.audit_log import AuditLog  # noqa: F401
 
@@ -95,6 +96,7 @@ app.include_router(admin_router, prefix="/api/v1")
 app.include_router(executive_router, prefix="/api/v1")
 app.include_router(auth_router, prefix="/api/v1")
 app.include_router(workspaces_router, prefix="/api/v1")
+app.include_router(organization_router, prefix="/api/v1")
 
 
 @app.get("/")
