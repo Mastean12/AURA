@@ -44,6 +44,11 @@ async def _run_migrations(conn):
         "ALTER TABLE documents ADD COLUMN IF NOT EXISTS workspace_id INTEGER",
         "ALTER TABLE documents ADD COLUMN IF NOT EXISTS organization_id INTEGER",
         "ALTER TABLE documents ADD COLUMN IF NOT EXISTS uploaded_by INTEGER",
+        "ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS workspace_type VARCHAR(50) DEFAULT 'department'",
+        "ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS owner_id INTEGER",
+        "ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'active'",
+        "ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE",
+        "CREATE TABLE IF NOT EXISTS workspace_settings (id SERIAL PRIMARY KEY, workspace_id INTEGER REFERENCES workspaces(id) ON DELETE CASCADE UNIQUE, ai_provider VARCHAR(20) DEFAULT 'gemini', executive_insights INTEGER DEFAULT 1, forecasting INTEGER DEFAULT 1, risk_analysis INTEGER DEFAULT 1, recommendations INTEGER DEFAULT 1, allow_uploads INTEGER DEFAULT 1, allow_ai_chat INTEGER DEFAULT 1, allow_analytics INTEGER DEFAULT 1, allow_pdf_export INTEGER DEFAULT 1, allow_executive_reports INTEGER DEFAULT 1, created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())",
     ]
     for stmt in migrations:
         try:
