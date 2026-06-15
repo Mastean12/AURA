@@ -8,7 +8,7 @@ PLANS = {
     "starter": {"name": "Starter", "price_cents": 2900, "users": 3, "workspaces": 1, "documents": 100, "ai_requests": 500, "storage_mb": 5120},
     "professional": {"name": "Professional", "price_cents": 9900, "users": 15, "workspaces": 5, "documents": 1000, "ai_requests": 5000, "storage_mb": 51200},
     "business": {"name": "Business", "price_cents": 29900, "users": 50, "workspaces": 999, "documents": 10000, "ai_requests": 25000, "storage_mb": 256000},
-    "enterprise": {"name": "Enterprise", "price_cents": 0, "users": 99999, "workspaces": 99999, "documents": 999999, "ai_requests": 999999, "storage_mb": 999999},
+    "enterprise": {"name": "Enterprise", "price_cents": 99900, "users": 99999, "workspaces": 99999, "documents": 999999, "ai_requests": 999999, "storage_mb": 999999},
 }
 
 
