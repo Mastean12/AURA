@@ -2,7 +2,7 @@ import logging
 
 import pandas as pd
 
-from app.services.ai_service import generate_response
+from app.services.ai_service import generate_response_async, _USER_FRIENDLY_ERROR
 from app.database.database import get_session_factory
 from app.models.document import Document
 from sqlalchemy import select
@@ -10,8 +10,6 @@ from sqlalchemy import select
 logger = logging.getLogger(__name__)
 
 _chat_sessions: dict[str, list[dict]] = {}
-
-_USER_FRIENDLY_ERROR = "AI analysis temporarily unavailable. Please try again shortly."
 
 
 def _df_summary(df: pd.DataFrame) -> str:
@@ -69,7 +67,7 @@ async def chat_analytics(doc_id: int, question: str, session_id: str) -> dict:
     prompt = _build_prompt(question, history, df_summary, sample)
 
     try:
-        raw = generate_response(prompt)
+        raw = await generate_response_async(prompt, request_type="analytics_chat")
     except Exception as e:
         logger.warning("Analytics chat failed: %s", e)
         return {"answer": _USER_FRIENDLY_ERROR, "confidence": 0.0}

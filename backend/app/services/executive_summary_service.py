@@ -1,7 +1,7 @@
 import json
 import logging
 
-from app.services.ai_service import generate_response
+from app.services.ai_service import generate_response_async
 from app.database.database import get_session_factory
 from app.models.document import Document
 from app.services.rag_service import answer_question as rag_query
@@ -48,7 +48,7 @@ Documents:
 """
 
     try:
-        raw = generate_response(prompt)
+        raw = await generate_response_async(prompt, request_type="executive_summary")
         raw = raw.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
         result = json.loads(raw)
     except Exception as e:

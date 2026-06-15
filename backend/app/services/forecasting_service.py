@@ -7,7 +7,7 @@ import pandas as pd
 
 from app.database.database import get_session_factory
 from app.models.document import Document
-from app.services.ai_service import generate_response
+from app.services.ai_service import generate_response_async
 from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
@@ -123,7 +123,7 @@ async def generate_forecast(doc_id: int, column: str, periods: int = 30) -> dict
         "Provide a 2-3 sentence business explanation of what this forecast means."
     )
     try:
-        explanation = generate_response(explanation_prompt)
+        explanation = await generate_response_async(explanation_prompt, request_type="forecasting")
     except Exception:
         explanation = f"The forecast indicates a {trend_direction}ward trend for {column} over the next {periods} periods."
 

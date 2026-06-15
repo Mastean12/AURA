@@ -6,7 +6,7 @@ import pandas as pd
 
 from app.database.database import get_session_factory
 from app.models.document import Document
-from app.services.ai_service import generate_response
+from app.services.ai_service import generate_response_async
 from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
@@ -65,7 +65,7 @@ def _classify_anomaly(values: np.ndarray, idx: int) -> str:
     return "outlier"
 
 
-def _generate_anomaly_explanation(values: np.ndarray, idx: int, anomaly_type: str, severity: str) -> str:
+async def _generate_anomaly_explanation(values: np.ndarray, idx: int, anomaly_type: str, severity: str) -> str:
     val = values[idx]
     prev = values[idx - 1] if idx > 0 else val
     pct_change = ((val - prev) / (prev + 1e-10)) * 100
@@ -78,7 +78,7 @@ def _generate_anomaly_explanation(values: np.ndarray, idx: int, anomaly_type: st
         "Provide a 1-sentence business explanation of what might have caused this."
     )
     try:
-        return generate_response(prompt)
+        return await generate_response_async(prompt, request_type="anomaly_detection")
     except Exception:
         if anomaly_type == "spike":
             return f"Unexpected surge: value {direction} by {abs(pct_change):.1f}%."
@@ -124,7 +124,7 @@ async def detect_anomalies(doc_id: int, column: str, severity_filter: str | None
             continue
 
         anomaly_type = _classify_anomaly(values, i)
-        explanation = _generate_anomaly_explanation(values, i, anomaly_type, severity)
+        explanation = await _generate_anomaly_explanation(values, i, anomaly_type, severity)
 
         expected = np.mean([values[max(0, i - 3):i].mean() if i > 0 else values[i],
                            values[i + 1:min(len(values), i + 4)].mean() if i < len(values) - 1 else values[i]])

@@ -6,7 +6,7 @@ import pandas as pd
 
 from app.database.database import get_session_factory
 from app.models.document import Document
-from app.services.ai_service import generate_response
+from app.services.ai_service import generate_response_async
 from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
@@ -198,7 +198,7 @@ async def calculate_risk_score(doc_id: int) -> dict:
         "Provide a 2-sentence executive summary of the key risks."
     )
     try:
-        overall_explanation = generate_response(overall_exp_prompt)
+        overall_explanation = await generate_response_async(overall_exp_prompt, request_type="risk_scoring")
     except Exception:
         overall_explanation = (
             f"Overall business risk is {overall}/100 ({_score_to_level(overall)}). "

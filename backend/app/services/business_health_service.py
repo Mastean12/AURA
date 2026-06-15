@@ -9,7 +9,7 @@ from app.database.database import get_session_factory
 from app.models.document import Document
 from app.services.health_service import get_dataset_health
 from app.services.risk_scoring_service import calculate_risk_score
-from app.services.ai_service import generate_response
+from app.services.ai_service import generate_response_async
 from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
@@ -80,7 +80,7 @@ async def calculate_business_health(doc_ids: list[int] | None = None) -> dict:
     )
     explanations = {}
     try:
-        raw = generate_response(prompt)
+        raw = await generate_response_async(prompt, request_type="business_health")
         explanations = {"raw": raw[:500]}
     except Exception:
         pass

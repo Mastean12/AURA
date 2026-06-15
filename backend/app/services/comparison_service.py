@@ -2,7 +2,7 @@ import logging
 
 from app.database.database import get_session_factory
 from app.models.document import Document
-from app.services.ai_service import generate_response
+from app.services.ai_service import generate_response_async
 from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
@@ -40,7 +40,7 @@ async def compare_documents(doc_id_a: int, doc_id_b: int, label_a: str = "Docume
     )
 
     try:
-        raw = generate_response(prompt)
+        raw = await generate_response_async(prompt, request_type="comparison")
         raw = raw.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
         import json
         result = json.loads(raw)

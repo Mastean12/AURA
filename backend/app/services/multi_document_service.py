@@ -2,7 +2,7 @@ import logging
 
 from app.database.database import get_session_factory
 from app.models.document import Document
-from app.services.ai_service import generate_response
+from app.services.ai_service import generate_response_async
 from app.services.insights_service import generate_insights
 from sqlalchemy import select
 
@@ -49,7 +49,7 @@ async def analyze_multi_document(doc_ids: list[int]) -> dict:
     )
 
     try:
-        raw = generate_response(prompt)
+        raw = await generate_response_async(prompt, request_type="multi_document")
         raw = raw.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
         import json
         result = json.loads(raw)

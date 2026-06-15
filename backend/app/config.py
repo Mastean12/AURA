@@ -24,6 +24,8 @@ class Settings(BaseSettings):
     langchain_tracing_v2: bool = False
     langchain_api_key: str = ""
 
+    cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
+
     upload_dir: str = "app/uploads"
     vectorstore_dir: str = "app/vectorstore"
 

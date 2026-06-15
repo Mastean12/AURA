@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Header
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import select, delete
 
 from app.database.database import get_session_factory
 from app.models.workspace import Workspace, WorkspaceMember
@@ -10,15 +10,15 @@ from app.services.permissions_service import require_permission
 router = APIRouter(prefix="/workspaces", tags=["workspaces"])
 
 
-def _get_user(authorization: str = Header("")):
+async def _get_user_from_token(authorization: str = Header("")) -> dict:
     if not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Invalid auth header")
-    import asyncio
     payload = decode_token(authorization[7:])
-    user = asyncio.run(get_current_user(int(payload["sub"])))
+    user = await get_current_user(int(payload["sub"]))
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    return user
+    return {"id": user.id, "email": user.email, "full_name": user.full_name,
+            "role": user.role, "organization_id": user.organization_id}
 
 
 class WorkspaceCreate(BaseModel):
@@ -32,42 +32,42 @@ class WorkspaceUpdate(BaseModel):
 
 
 @router.post("/")
-async def create_workspace(payload: WorkspaceCreate, user=Depends(_get_user)):
-    require_permission(user.role, "manage_workspaces")
-    if not user.organization_id:
+async def create_workspace(payload: WorkspaceCreate, user: dict = Depends(_get_user_from_token)):
+    require_permission(user["role"], "manage_workspaces")
+    if not user.get("organization_id"):
         raise HTTPException(status_code=400, detail="No organization")
     async with get_session_factory()() as db:
         ws = Workspace(name=payload.name, description=payload.description,
-                       organization_id=user.organization_id, created_by=user.id)
+                       organization_id=user["organization_id"], created_by=user["id"])
         db.add(ws)
         await db.commit()
         await db.refresh(ws)
-        member = WorkspaceMember(workspace_id=ws.id, user_id=user.id, role="admin")
+        member = WorkspaceMember(workspace_id=ws.id, user_id=user["id"], role="admin")
         db.add(member)
         await db.commit()
         return {"id": ws.id, "name": ws.name, "description": ws.description}
 
 
 @router.get("/")
-async def list_workspaces(user=Depends(_get_user)):
-    if not user.organization_id:
+async def list_workspaces(user: dict = Depends(_get_user_from_token)):
+    if not user.get("organization_id"):
         return []
     async with get_session_factory()() as db:
         result = await db.execute(
-            select(Workspace).where(Workspace.organization_id == user.organization_id)
+            select(Workspace).where(Workspace.organization_id == user["organization_id"])
         )
         return [{"id": w.id, "name": w.name, "description": w.description} for w in result.scalars().all()]
 
 
 @router.put("/{ws_id}")
-async def update_workspace(ws_id: int, payload: WorkspaceUpdate, user=Depends(_get_user)):
-    require_permission(user.role, "manage_workspaces")
+async def update_workspace(ws_id: int, payload: WorkspaceUpdate, user: dict = Depends(_get_user_from_token)):
+    require_permission(user["role"], "manage_workspaces")
     async with get_session_factory()() as db:
         result = await db.execute(select(Workspace).where(Workspace.id == ws_id))
         ws = result.scalar_one_or_none()
         if not ws:
             raise HTTPException(status_code=404, detail="Workspace not found")
-        if ws.organization_id != user.organization_id:
+        if ws.organization_id != user["organization_id"]:
             raise HTTPException(status_code=403, detail="Access denied")
         if payload.name:
             ws.name = payload.name
@@ -78,15 +78,16 @@ async def update_workspace(ws_id: int, payload: WorkspaceUpdate, user=Depends(_g
 
 
 @router.delete("/{ws_id}")
-async def delete_workspace(ws_id: int, user=Depends(_get_user)):
-    require_permission(user.role, "manage_workspaces")
+async def delete_workspace(ws_id: int, user: dict = Depends(_get_user_from_token)):
+    require_permission(user["role"], "manage_workspaces")
     async with get_session_factory()() as db:
         result = await db.execute(select(Workspace).where(Workspace.id == ws_id))
         ws = result.scalar_one_or_none()
         if not ws:
             raise HTTPException(status_code=404, detail="Workspace not found")
-        if ws.organization_id != user.organization_id:
+        if ws.organization_id != user["organization_id"]:
             raise HTTPException(status_code=403, detail="Access denied")
+        await db.execute(delete(WorkspaceMember).where(WorkspaceMember.workspace_id == ws_id))
         await db.delete(ws)
         await db.commit()
         return {"detail": "Workspace deleted"}

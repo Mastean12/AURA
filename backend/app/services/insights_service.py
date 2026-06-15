@@ -4,7 +4,7 @@ import time
 
 import pandas as pd
 
-from app.services.ai_service import generate_response
+from app.services.ai_service import generate_response_async
 from app.database.database import get_session_factory
 from app.models.document import Document
 from app.services.cache_service import compute_doc_hash, get_cached, set_cached
@@ -101,7 +101,7 @@ async def generate_insights(doc_id: int) -> dict:
     prompt = _build_insights_prompt(df_summary)
 
     try:
-        raw = generate_response(prompt)
+        raw = await generate_response_async(prompt, request_type="insights")
         raw = raw.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
         result = json.loads(raw)
     except Exception as e:
@@ -141,7 +141,7 @@ async def generate_executive_summary(doc_id: int) -> dict:
     prompt = _build_executive_summary_prompt(df_summary)
 
     try:
-        raw = generate_response(prompt)
+        raw = await generate_response_async(prompt, request_type="executive_summary")
         raw = raw.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
         result = json.loads(raw)
     except Exception as e:
@@ -155,11 +155,9 @@ async def generate_executive_summary(doc_id: int) -> dict:
     return result
 
 
-def clear_cache(doc_id: int | None = None):
-    import asyncio
+async def clear_cache(doc_id: int | None = None):
+    from app.services.cache_service import invalidate_cache
     try:
-        asyncio.get_event_loop().run_until_complete(
-            __import__("app.services.cache_service", fromlist=["invalidate_cache"]).invalidate_cache(doc_id)
-        )
-    except Exception:
-        pass
+        await invalidate_cache(doc_id)
+    except Exception as e:
+        logger.warning("Cache clear failed: %s", e)

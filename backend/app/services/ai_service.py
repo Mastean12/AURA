@@ -2,11 +2,9 @@ import logging
 import time
 
 from app.config import get_settings
-from app.services.gemini_client import generate_with_retry
+from app.services.gemini_client import generate_with_retry, _USER_FRIENDLY_ERROR
 
 logger = logging.getLogger(__name__)
-
-_USER_FRIENDLY_ERROR = "AI analysis temporarily unavailable. Please try again shortly."
 _RETRYABLE_OPENAI_CODES = {429, 500, 502, 503, 504}
 _OPENAI_MAX_RETRIES = 3
 _OPENAI_BASE_DELAY = 2.0

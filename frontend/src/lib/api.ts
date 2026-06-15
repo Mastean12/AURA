@@ -80,11 +80,8 @@ export async function queryDocuments(payload: {
   session_id?: string;
   doc_id?: number;
 }): Promise<QueryResponse> {
-  const url = `${API_BASE}/documents/query`;
-  log("info", "POST", url);
-  const res = await fetch(url, {
+  const res = await apiFetch(`${API_BASE}/documents/query`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
   return res.json();

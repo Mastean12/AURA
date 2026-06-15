@@ -6,7 +6,7 @@ import pandas as pd
 
 from app.database.database import get_session_factory
 from app.models.document import Document
-from app.services.ai_service import generate_response
+from app.services.ai_service import generate_response_async
 from app.services.analytics_service import get_analytics
 from app.services.insights_service import generate_insights
 from app.services.risk_scoring_service import calculate_risk_score
@@ -116,7 +116,7 @@ async def generate_recommendations(doc_id: int) -> list[dict]:
     prompt = _build_recommendation_prompt(df_summary, insights_text, risk_text)
 
     try:
-        raw = generate_response(prompt)
+        raw = await generate_response_async(prompt, request_type="recommendation_engine.py")
         raw = raw.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
         result = json.loads(raw)
         recommendations = result.get("recommendations", [])

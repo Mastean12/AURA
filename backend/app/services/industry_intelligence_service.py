@@ -7,7 +7,7 @@ import pandas as pd
 
 from app.database.database import get_session_factory
 from app.models.document import Document
-from app.services.ai_service import generate_response
+from app.services.ai_service import generate_response_async
 from app.services.kpi_detection_service import KPI_PATTERNS as BASE_KPI_PATTERNS, _infer_format, _normalize
 from sqlalchemy import select
 
@@ -124,12 +124,12 @@ async def generate_industry_dashboard(doc_id: int) -> dict:
     summary = ""
     recommendations: list[str] = []
     try:
-        summary = generate_response(summary_prompt)
+        summary = await generate_response_async(summary_prompt, request_type="industry_intelligence")
     except Exception:
         summary = f"Industry analysis for {industry} organization based on {len(df.columns)} data dimensions."
 
     try:
-        raw = generate_response(rec_prompt)
+        raw = await generate_response_async(rec_prompt, request_type="industry_intelligence")
         raw = raw.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
         recommendations = json.loads(raw) if raw.startswith("[") else []
     except Exception:

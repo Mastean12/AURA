@@ -4,7 +4,7 @@ import logging
 
 import pandas as pd
 
-from app.services.ai_service import generate_response
+from app.services.ai_service import generate_response_async
 from app.database.database import get_session_factory
 from app.models.document import Document
 from sqlalchemy import select
@@ -68,7 +68,7 @@ async def generate_chart_insight(doc_id: int, chart_type: str, column: str) -> s
     prompt = _build_chart_insight_prompt(summary)
 
     try:
-        raw = generate_response(prompt)
+        raw = await generate_response_async(prompt, request_type="chart_insight")
         raw = raw.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
         result = json.loads(raw)
         return result.get("insight", "Chart insight temporarily unavailable.")

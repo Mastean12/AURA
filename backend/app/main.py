@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
 from app.database.database import init_db
-from app.services.ai_service import generate_response, get_available_providers, _gemini_generate
+from app.services.ai_service import generate_response_async, get_available_providers
 from app.api.upload import router as documents_router
 from app.api.chat import router as chat_router
 from app.api.summary import router as summary_router
@@ -58,10 +58,7 @@ app = FastAPI(title=settings.app_name, lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-    ],
+    allow_origins=[o.strip() for o in settings.cors_origins.split(",")],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -136,7 +133,7 @@ async def ai_health():
 
     start = time.perf_counter()
     try:
-        response = generate_response("Return only the word OK if you can read this.")
+        response = await generate_response_async("Return only the word OK if you can read this.", request_type="health_check")
         elapsed = int((time.perf_counter() - start) * 1000)
         result["status"] = "healthy" if response.strip() == "OK" else "degraded"
         result["latency_ms"] = elapsed
@@ -165,7 +162,7 @@ async def test_ai():
     if not providers.get(providers["active"]):
         return {"error": f"No API key configured for active provider '{providers['active']}'", "providers": providers}
     try:
-        result = generate_response("Return only the word 'ok' if you can read this.")
+        result = await generate_response_async("Return only the word 'ok' if you can read this.", request_type="test")
         return {"status": "ok", "response": result.strip(), "provider": providers["active"]}
     except Exception as e:
         return {"status": "error", "error": str(e), "provider": providers["active"]}

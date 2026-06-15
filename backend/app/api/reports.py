@@ -1,5 +1,6 @@
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import Response
+from pydantic import BaseModel
 
 from app.services.report_service import generate_report
 from app.services.board_report_service import generate_board_report
@@ -9,33 +10,33 @@ from app.services.intelligence_report_generator import generate_intelligence_rep
 router = APIRouter(prefix="/reports", tags=["reports"])
 
 
+class ExportRequest(BaseModel):
+    doc_id: int
+
+
+class ReportRequest(BaseModel):
+    doc_ids: list[int]
+    company_name: str = ""
+
+
 @router.post("/export")
-async def export_report(payload: dict):
-    doc_id = payload.get("doc_id")
-    if not doc_id or not isinstance(doc_id, int):
-        raise HTTPException(status_code=400, detail="doc_id is required")
+async def export_report(payload: ExportRequest):
     try:
-        pdf_bytes = await generate_report(doc_id)
+        pdf_bytes = await generate_report(payload.doc_id)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
     return Response(
         content=bytes(pdf_bytes),
         media_type="application/pdf",
-        headers={
-            "Content-Disposition": f'attachment; filename="aura-report-{doc_id}.pdf"',
-        },
+        headers={"Content-Disposition": f'attachment; filename="aura-report-{payload.doc_id}.pdf"'},
     )
 
 
 @router.post("/board-report")
-async def board_report(payload: dict):
-    doc_ids = payload.get("doc_ids", [])
-    company_name = payload.get("company_name", "")
-    if not doc_ids:
-        raise HTTPException(status_code=400, detail="doc_ids is required")
+async def board_report(payload: ReportRequest):
     try:
-        pdf_bytes = await generate_board_report(doc_ids, company_name)
+        pdf_bytes = await generate_board_report(payload.doc_ids, payload.company_name)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Board report failed: {e}")
 
@@ -47,13 +48,9 @@ async def board_report(payload: dict):
 
 
 @router.post("/executive-briefing-pdf")
-async def executive_briefing_report(payload: dict):
-    doc_ids = payload.get("doc_ids", [])
-    company_name = payload.get("company_name", "")
-    if not doc_ids:
-        raise HTTPException(status_code=400, detail="doc_ids is required")
+async def executive_briefing_report(payload: ReportRequest):
     try:
-        pdf_bytes = await generate_executive_briefing_pdf(doc_ids, company_name)
+        pdf_bytes = await generate_executive_briefing_pdf(payload.doc_ids, payload.company_name)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Executive briefing failed: {e}")
 
@@ -65,12 +62,9 @@ async def executive_briefing_report(payload: dict):
 
 
 @router.post("/intelligence-report")
-async def intelligence_report(payload: dict):
-    doc_ids = payload.get("doc_ids", [])
-    if not doc_ids:
-        raise HTTPException(status_code=400, detail="doc_ids is required")
+async def intelligence_report(payload: ReportRequest):
     try:
-        pdf_bytes = await generate_intelligence_report(doc_ids)
+        pdf_bytes = await generate_intelligence_report(payload.doc_ids)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Intelligence report failed: {e}")
 
