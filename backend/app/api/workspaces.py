@@ -4,9 +4,11 @@ from sqlalchemy import select, delete, func
 
 from app.database.database import get_session_factory
 from app.models.workspace import Workspace, WorkspaceMember, WorkspaceSettings
+from app.models.user import User
 from app.models.document import Document
 from app.services.auth_service import decode_token, get_current_user
 from app.services.permissions_service import require_permission
+from app.services.email_service import send_workspace_invite
 
 router = APIRouter(prefix="/workspaces", tags=["workspaces"])
 
@@ -42,10 +44,25 @@ async def _verify_workspace_access(workspace_id: int, user: dict, min_role: str 
         member = member.scalar_one_or_none()
         user_role = member.role if member else user["role"]
         role_rank = {"workspace_admin": 100, "manager": 60, "analyst": 30, "viewer": 10,
-                     "admin": 100, "analyst": 30, "viewer": 10}
+                     "admin": 100}
         if role_rank.get(user_role, 0) < role_rank.get(min_role, 0):
             raise HTTPException(status_code=403, detail="Insufficient workspace role")
         return {"workspace": ws, "member_role": user_role}
+
+
+async def _get_member_list(ws_id: int, db) -> list[dict]:
+    rows = await db.execute(
+        select(WorkspaceMember, User.email, User.full_name, User.is_active)
+        .join(User, WorkspaceMember.user_id == User.id)
+        .where(WorkspaceMember.workspace_id == ws_id)
+    )
+    return [
+        {"id": m.WorkspaceMember.id, "user_id": m.WorkspaceMember.user_id,
+         "email": m.email, "full_name": m.full_name,
+         "role": m.WorkspaceMember.role, "status": "active" if m.is_active else "inactive",
+         "joined_at": str(m.WorkspaceMember.joined_at) if m.WorkspaceMember.joined_at else None}
+        for m in rows.all()
+    ]
 
 
 class WorkspaceCreate(BaseModel):
@@ -63,6 +80,12 @@ class WorkspaceUpdate(BaseModel):
 
 class WorkspaceMemberAdd(BaseModel):
     user_id: int
+    role: str = "analyst"
+    notify: bool = True
+
+
+class WorkspaceInviteByEmail(BaseModel):
+    email: str
     role: str = "analyst"
 
 
@@ -99,7 +122,8 @@ async def create_workspace(payload: WorkspaceCreate, user: dict = Depends(_get_u
         db.add(WorkspaceMember(workspace_id=ws.id, user_id=user["id"], role="workspace_admin"))
         db.add(WorkspaceSettings(workspace_id=ws.id))
         await db.commit()
-        return {"id": ws.id, "name": ws.name, "description": ws.description, "workspace_type": ws.workspace_type, "status": ws.status}
+        return {"id": ws.id, "name": ws.name, "description": ws.description,
+                "workspace_type": ws.workspace_type, "status": ws.status}
 
 
 @router.get("/")
@@ -107,6 +131,7 @@ async def list_workspaces(user: dict = Depends(_get_user_from_token)):
     async with get_session_factory()() as db:
         result = await db.execute(
             select(Workspace).where(Workspace.organization_id == user["organization_id"])
+            .order_by(Workspace.status, Workspace.created_at.desc())
         )
         wss = result.scalars().all()
         out = []
@@ -117,11 +142,10 @@ async def list_workspaces(user: dict = Depends(_get_user_from_token)):
                 )
             )
             m = member.scalar_one_or_none()
-            role_in_ws = m.role if m else None
             out.append({
                 "id": ws.id, "name": ws.name, "description": ws.description,
                 "workspace_type": ws.workspace_type, "status": ws.status,
-                "my_role": role_in_ws,
+                "my_role": m.role if m else None,
                 "member_count": (await db.execute(
                     select(func.count(WorkspaceMember.id)).where(WorkspaceMember.workspace_id == ws.id)
                 )).scalar() or 0,
@@ -137,9 +161,7 @@ async def get_workspace(ws_id: int, user: dict = Depends(_get_user_from_token)):
     info = await _verify_workspace_access(ws_id, user)
     ws = info["workspace"]
     async with get_session_factory()() as db:
-        members = (await db.execute(
-            select(WorkspaceMember).where(WorkspaceMember.workspace_id == ws_id)
-        )).scalars().all()
+        members = await _get_member_list(ws_id, db)
         settings = (await db.execute(
             select(WorkspaceSettings).where(WorkspaceSettings.workspace_id == ws_id)
         )).scalar_one_or_none()
@@ -151,10 +173,7 @@ async def get_workspace(ws_id: int, user: dict = Depends(_get_user_from_token)):
             "doc_count": (await db.execute(
                 select(func.count(Document.id)).where(Document.workspace_id == ws_id)
             )).scalar() or 0,
-            "members": [
-                {"id": m.id, "user_id": m.user_id, "role": m.role, "joined_at": str(m.joined_at) if m.joined_at else None}
-                for m in members
-            ],
+            "members": members,
             "settings": {
                 "ai_provider": settings.ai_provider if settings else "gemini",
                 "executive_insights": bool(settings.executive_insights) if settings else True,
@@ -194,14 +213,28 @@ async def update_workspace(ws_id: int, payload: WorkspaceUpdate, user: dict = De
 
 @router.delete("/{ws_id}")
 async def delete_workspace(ws_id: int, user: dict = Depends(_get_user_from_token)):
+    """Soft-delete: archive the workspace instead of removing it."""
     info = await _verify_workspace_access(ws_id, user, min_role="workspace_admin")
     ws = info["workspace"]
+    ws.status = "archived"
     async with get_session_factory()() as db:
-        await db.execute(delete(WorkspaceMember).where(WorkspaceMember.workspace_id == ws_id))
-        await db.execute(delete(WorkspaceSettings).where(WorkspaceSettings.workspace_id == ws_id))
-        await db.delete(ws)
+        db.add(ws)
         await db.commit()
-    return {"detail": "Workspace deleted"}
+    return {"detail": "Workspace archived. Use restore to recover."}
+
+
+@router.post("/{ws_id}/restore")
+async def restore_workspace(ws_id: int, user: dict = Depends(_get_user_from_token)):
+    """Restore an archived workspace to active status."""
+    info = await _verify_workspace_access(ws_id, user, min_role="workspace_admin")
+    ws = info["workspace"]
+    if ws.status != "archived":
+        raise HTTPException(status_code=400, detail="Workspace is not archived")
+    ws.status = "active"
+    async with get_session_factory()() as db:
+        db.add(ws)
+        await db.commit()
+    return {"detail": "Workspace restored"}
 
 
 @router.post("/{ws_id}/members")
@@ -219,7 +252,43 @@ async def add_member(ws_id: int, payload: WorkspaceMemberAdd, user: dict = Depen
             raise HTTPException(status_code=400, detail="User already a member")
         db.add(WorkspaceMember(workspace_id=ws_id, user_id=payload.user_id, role=payload.role))
         await db.commit()
+    if payload.notify:
+        invited_user = await get_current_user(payload.user_id)
+        if invited_user and invited_user.email:
+            login_url = "http://localhost:3000/login"
+            await send_workspace_invite(invited_user.email, user["full_name"], ws_id, login_url)
     return {"detail": "Member added"}
+
+
+@router.post("/{ws_id}/invite-by-email")
+async def invite_by_email(ws_id: int, payload: WorkspaceInviteByEmail, user: dict = Depends(_get_user_from_token)):
+    await _verify_workspace_access(ws_id, user, min_role="workspace_admin")
+    if payload.role not in WORKSPACE_ROLES:
+        raise HTTPException(status_code=400, detail=f"Invalid role. Choose: {WORKSPACE_ROLES}")
+    async with get_session_factory()() as db:
+        found = await db.execute(select(User).where(User.email == payload.email))
+        target = found.scalar_one_or_none()
+        if not target:
+            existing = await db.execute(
+                select(WorkspaceMember, User).join(User, WorkspaceMember.user_id == User.id)
+                .where(WorkspaceMember.workspace_id == ws_id, User.email == payload.email)
+            )
+            if existing.first():
+                raise HTTPException(status_code=400, detail="User already a member")
+            raise HTTPException(status_code=404, detail=f"No user found with email {payload.email}")
+        existing = await db.execute(
+            select(WorkspaceMember).where(
+                WorkspaceMember.workspace_id == ws_id, WorkspaceMember.user_id == target.id
+            )
+        )
+        if existing.scalar_one_or_none():
+            raise HTTPException(status_code=400, detail="User already a member")
+        db.add(WorkspaceMember(workspace_id=ws_id, user_id=target.id, role=payload.role))
+        await db.commit()
+    ws_name = f"workspace #{ws_id}"
+    login_url = "http://localhost:3000/login"
+    await send_workspace_invite(payload.email, user["full_name"], ws_name, login_url)
+    return {"detail": f"Invitation sent to {payload.email}"}
 
 
 @router.put("/{ws_id}/members/{user_id}")

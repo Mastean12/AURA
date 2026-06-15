@@ -3,19 +3,26 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Settings, Users, Building2, Save, Trash2, Plus, X, ChevronDown,
-  Loader2, FileText, BarChart3, Brain, Shield, Check, AlertTriangle,
-  Database, Bot, RefreshCw,
+  Settings, Users, Building2, Save, Trash2, Plus, X, Loader2,
+  FileText, BarChart3, Brain, Shield, Check, AlertTriangle, RefreshCw,
+  RotateCcw, Mail,
 } from "lucide-react";
-import { listWorkspaces, getWorkspace, updateWorkspace, deleteWorkspace,
+import {
+  listWorkspaces, getWorkspace, updateWorkspace, deleteWorkspace,
   addWorkspaceMember, updateMemberRole, removeMember, getWorkspaceSettings,
-  updateWorkspaceSettings } from "@/lib/api";
+  updateWorkspaceSettings, createWorkspace,
+} from "@/lib/api";
+
+interface Member {
+  id: number; user_id: number; email: string; full_name: string;
+  role: string; status: string; joined_at: string | null;
+}
 
 interface WorkspaceData {
   id: number; name: string; description: string; workspace_type: string;
   status: string; owner_id: number; created_at: string;
   member_count: number; doc_count: number;
-  members: { id: number; user_id: number; role: string; joined_at: string }[];
+  members: Member[];
   settings: Record<string, unknown>;
 }
 
@@ -30,14 +37,19 @@ export default function WorkspaceSettingsPage() {
   const [editDesc, setEditDesc] = useState("");
   const [editType, setEditType] = useState("department");
   const [activeTab, setActiveTab] = useState("overview");
+  const [notification, setNotification] = useState("");
+  const [showCreate, setShowCreate] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newDesc, setNewDesc] = useState("");
+  const [newType, setNewType] = useState("department");
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState("analyst");
-  const [notification, setNotification] = useState("");
 
   useEffect(() => {
     listWorkspaces().then(wss => {
       setWorkspaces(wss);
-      if (wss.length > 0) { setSelectedId(wss[0].id); loadWorkspace(wss[0].id); }
+      const active = wss.find((w: any) => w.status === "active");
+      if (active) { setSelectedId(active.id); loadWorkspace(active.id); }
       else setLoading(false);
     }).catch(() => setLoading(false));
   }, []);
@@ -55,6 +67,11 @@ export default function WorkspaceSettingsPage() {
     finally { setLoading(false); }
   }
 
+  async function refreshList() {
+    const wss = await listWorkspaces();
+    setWorkspaces(wss);
+  }
+
   async function handleSave() {
     if (!selectedId) return;
     setSaving(true);
@@ -68,27 +85,50 @@ export default function WorkspaceSettingsPage() {
 
   async function handleDelete() {
     if (!selectedId) return;
-    if (!confirm("Delete this workspace? This cannot be undone.")) return;
+    if (!confirm("Archive this workspace? It can be restored later.")) return;
     try {
       await deleteWorkspace(selectedId);
-      showNotification("Workspace deleted");
-      setWorkspaces(prev => prev.filter(w => w.id !== selectedId));
-      setSelectedId(null);
-      setData(null);
-    } catch { showNotification("Delete failed"); }
+      showNotification("Workspace archived");
+      await refreshList();
+      setSelectedId(null); setData(null);
+    } catch { showNotification("Archive failed"); }
   }
 
-  async function handleInvite() {
+  async function handleRestore(wsId: number) {
+    try {
+      const token = localStorage.getItem("aura_token");
+      await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/v1/workspaces/${wsId}/restore`, {
+        method: "POST", headers: { Authorization: `Bearer ${token}` },
+      });
+      showNotification("Workspace restored");
+      await refreshList();
+      loadWorkspace(wsId);
+    } catch { showNotification("Restore failed"); }
+  }
+
+  async function handleCreate() {
+    if (!newName.trim()) return;
+    try {
+      await createWorkspace({ name: newName, description: newDesc, workspace_type: newType });
+      showNotification("Workspace created");
+      setShowCreate(false); setNewName(""); setNewDesc("");
+      await refreshList();
+    } catch { showNotification("Create failed"); }
+  }
+
+  async function handleInviteByEmail() {
     if (!selectedId || !inviteEmail) return;
     try {
-      const usersRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/v1/auth/me`, {
-        headers: { Authorization: `Bearer ${localStorage.getItem("aura_token")}` },
-      });
-      const currentUser = await usersRes.json();
-      await addWorkspaceMember(selectedId, currentUser.id, inviteRole);
-      showNotification("Member added");
-      loadWorkspace(selectedId);
+      const token = localStorage.getItem("aura_token");
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/v1/workspaces/${selectedId}/invite-by-email`,
+        { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ email: inviteEmail, role: inviteRole }) }
+      );
+      if (!res.ok) { const err = await res.json(); showNotification(err.detail || "Invite failed"); return; }
+      showNotification(`Invitation sent to ${inviteEmail}`);
       setInviteEmail("");
+      loadWorkspace(selectedId);
     } catch { showNotification("Invite failed"); }
   }
 
@@ -106,17 +146,14 @@ export default function WorkspaceSettingsPage() {
 
   async function handleToggleSetting(key: string, current: boolean) {
     if (!selectedId) return;
-    try {
-      await updateWorkspaceSettings(selectedId, { [key]: current ? 0 : 1 });
-      showNotification("Setting updated");
-      loadWorkspace(selectedId);
-    } catch { showNotification("Update failed"); }
+    try { await updateWorkspaceSettings(selectedId, { [key]: current ? 0 : 1 }); showNotification("Setting updated"); loadWorkspace(selectedId); }
+    catch { showNotification("Update failed"); }
   }
 
-  function showNotification(msg: string) {
-    setNotification(msg);
-    setTimeout(() => setNotification(""), 3000);
-  }
+  function showNotification(msg: string) { setNotification(msg); setTimeout(() => setNotification(""), 3000); }
+
+  const activeWs = workspaces.filter((w: any) => w.status === "active");
+  const archivedWs = workspaces.filter((w: any) => w.status === "archived");
 
   const tabs = [
     { id: "overview", label: "Overview", icon: Building2 },
@@ -127,7 +164,6 @@ export default function WorkspaceSettingsPage() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-6 p-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Workspace Settings</h1>
@@ -135,31 +171,76 @@ export default function WorkspaceSettingsPage() {
         </div>
       </div>
 
-      {/* Workspace selector */}
-      <div className="flex flex-wrap gap-2">
-        {workspaces.map(ws => (
-          <button key={ws.id} onClick={() => loadWorkspace(ws.id)}
-            className={`rounded-xl border px-3 py-1.5 text-xs transition-colors ${
-              selectedId === ws.id ? "border-blue-600 bg-blue-600/20 text-blue-300" : "border-zinc-800 text-zinc-400 hover:border-zinc-700"
-            }`}>
-            {ws.name}
-            {ws.status === "archived" && <span className="ml-1 text-zinc-600">(archived)</span>}
+      {/* Active workspaces */}
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-xs font-medium uppercase tracking-wider text-zinc-500">Active Workspaces</p>
+          <button onClick={() => setShowCreate(!showCreate)}
+            className="flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium hover:bg-blue-500">
+            <Plus className="h-3.5 w-3.5" />New Workspace
           </button>
-        ))}
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {activeWs.map((ws: any) => (
+            <button key={ws.id} onClick={() => loadWorkspace(ws.id)}
+              className={`rounded-xl border px-3 py-1.5 text-xs transition-colors ${
+                selectedId === ws.id ? "border-blue-600 bg-blue-600/20 text-blue-300" : "border-zinc-800 text-zinc-400 hover:border-zinc-700"
+              }`}>
+              {ws.name}
+            </button>
+          ))}
+          {activeWs.length === 0 && <span className="text-xs text-zinc-600">No active workspaces</span>}
+        </div>
       </div>
 
-      {/* Notification */}
-      {notification && (
-        <div className="rounded-lg border border-emerald-800/30 bg-emerald-950/20 px-4 py-2 text-xs text-emerald-400">
-          {notification}
+      {/* Archived workspaces */}
+      {archivedWs.length > 0 && (
+        <div>
+          <p className="text-xs font-medium uppercase tracking-wider text-zinc-600 mb-2">Archived Workspaces</p>
+          <div className="flex flex-wrap gap-2">
+            {archivedWs.map((ws: any) => (
+              <div key={ws.id} className="flex items-center gap-1 rounded-xl border border-zinc-800 bg-zinc-900/30 px-3 py-1.5 text-xs text-zinc-500">
+                <span className="line-through">{ws.name}</span>
+                <button onClick={() => handleRestore(ws.id)}
+                  className="ml-1 rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] text-emerald-400 hover:bg-zinc-700">
+                  <RotateCcw className="h-3 w-3 inline mr-0.5" />Restore
+                </button>
+              </div>
+            ))}
+          </div>
         </div>
+      )}
+
+      {/* Create workspace dialog */}
+      {showCreate && (
+        <div className="rounded-xl border border-zinc-800 bg-zinc-900/70 p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-medium">Create Workspace</h3>
+            <button onClick={() => setShowCreate(false)} className="text-zinc-500 hover:text-zinc-300"><X className="h-4 w-4" /></button>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-3 mb-3">
+            <input value={newName} onChange={e => setNewName(e.target.value)} placeholder="Workspace name"
+              className="rounded-lg border border-zinc-800 bg-zinc-900/70 px-3 py-2 text-xs text-zinc-100 placeholder-zinc-600 outline-none focus:border-blue-600" />
+            <input value={newDesc} onChange={e => setNewDesc(e.target.value)} placeholder="Description (optional)"
+              className="rounded-lg border border-zinc-800 bg-zinc-900/70 px-3 py-2 text-xs text-zinc-100 placeholder-zinc-600 outline-none focus:border-blue-600" />
+            <select value={newType} onChange={e => setNewType(e.target.value)}
+              className="rounded-lg border border-zinc-800 bg-zinc-900/70 px-3 py-2 text-xs text-zinc-300 outline-none focus:border-blue-600">
+              <option value="department">Department</option><option value="project">Project</option>
+              <option value="team">Team</option><option value="custom">Custom</option>
+            </select>
+          </div>
+          <button onClick={handleCreate} className="rounded-lg bg-blue-600 px-4 py-2 text-xs font-medium hover:bg-blue-500">Create</button>
+        </div>
+      )}
+
+      {notification && (
+        <div className="rounded-lg border border-emerald-800/30 bg-emerald-950/20 px-4 py-2 text-xs text-emerald-400">{notification}</div>
       )}
 
       {loading ? (
         <div className="space-y-4">{[1,2,3].map(i => <div key={i} className="h-24 animate-pulse rounded-xl bg-zinc-800/50" />)}</div>
       ) : data ? (
         <>
-          {/* Tabs */}
           <div className="flex gap-1 rounded-xl border border-zinc-800 bg-zinc-900/30 p-1">
             {tabs.map(tab => (
               <button key={tab.id} onClick={() => setActiveTab(tab.id)}
@@ -171,7 +252,6 @@ export default function WorkspaceSettingsPage() {
             ))}
           </div>
 
-          {/* Tab: Overview */}
           {activeTab === "overview" && (
             <div className="space-y-4">
               <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-5">
@@ -194,7 +274,6 @@ export default function WorkspaceSettingsPage() {
                 </div>
               </div>
 
-              {/* Edit Workspace */}
               <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-5">
                 <h2 className="text-sm font-medium uppercase tracking-wider text-zinc-500 mb-4">Edit Workspace</h2>
                 <div className="space-y-4">
@@ -212,27 +291,23 @@ export default function WorkspaceSettingsPage() {
                     <label className="text-xs text-zinc-400">Type</label>
                     <select value={editType} onChange={e => setEditType(e.target.value)}
                       className="mt-1 w-full rounded-lg border border-zinc-800 bg-zinc-900/70 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-blue-600">
-                      <option value="department">Department</option>
-                      <option value="project">Project</option>
-                      <option value="team">Team</option>
-                      <option value="custom">Custom</option>
+                      <option value="department">Department</option><option value="project">Project</option>
+                      <option value="team">Team</option><option value="custom">Custom</option>
                     </select>
                   </div>
                   <div className="flex gap-2">
                     <button onClick={handleSave} disabled={saving}
                       className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-xs font-medium hover:bg-blue-500 disabled:opacity-50">
-                      {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-                      Save Changes
+                      {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}Save
                     </button>
                     <button onClick={handleDelete}
-                      className="flex items-center gap-1.5 rounded-lg border border-red-800/30 bg-red-950/20 px-4 py-2 text-xs text-red-400 hover:bg-red-950/40">
-                      <Trash2 className="h-3.5 w-3.5" />Delete Workspace
+                      className="flex items-center gap-1.5 rounded-lg border border-amber-800/30 bg-amber-950/20 px-4 py-2 text-xs text-amber-400 hover:bg-amber-950/40">
+                      <Trash2 className="h-3.5 w-3.5" />Archive
                     </button>
                   </div>
                 </div>
               </div>
 
-              {/* Resources */}
               <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-5">
                 <h2 className="text-sm font-medium uppercase tracking-wider text-zinc-500 mb-4">Workspace Resources</h2>
                 <div className="grid gap-3 sm:grid-cols-4">
@@ -253,60 +328,71 @@ export default function WorkspaceSettingsPage() {
             </div>
           )}
 
-          {/* Tab: Members */}
           {activeTab === "members" && (
             <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-5">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-sm font-medium uppercase tracking-wider text-zinc-500">Members ({data.members.length})</h2>
               </div>
+
               <div className="mb-4 flex gap-2">
-                <input value={inviteEmail} onChange={e => setInviteEmail(e.target.value)} placeholder="User ID to invite"
+                <input value={inviteEmail} onChange={e => setInviteEmail(e.target.value)}
+                  placeholder="Enter email address to invite"
                   className="flex-1 rounded-lg border border-zinc-800 bg-zinc-900/70 px-3 py-2 text-xs text-zinc-100 placeholder-zinc-600 outline-none focus:border-blue-600" />
                 <select value={inviteRole} onChange={e => setInviteRole(e.target.value)}
                   className="rounded-lg border border-zinc-800 bg-zinc-900/70 px-3 py-2 text-xs text-zinc-300 outline-none focus:border-blue-600">
-                  <option value="workspace_admin">Admin</option>
-                  <option value="manager">Manager</option>
-                  <option value="analyst">Analyst</option>
-                  <option value="viewer">Viewer</option>
+                  <option value="workspace_admin">Admin</option><option value="manager">Manager</option>
+                  <option value="analyst">Analyst</option><option value="viewer">Viewer</option>
                 </select>
-                <button onClick={handleInvite} className="flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-2 text-xs font-medium hover:bg-blue-500">
-                  <Plus className="h-3.5 w-3.5" />Add
+                <button onClick={handleInviteByEmail}
+                  className="flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-2 text-xs font-medium hover:bg-blue-500">
+                  <Mail className="h-3.5 w-3.5" />Invite
                 </button>
               </div>
+
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs">
                   <thead>
                     <tr className="border-b border-zinc-800 text-zinc-500">
-                      <th className="px-3 py-2 font-medium">User ID</th>
+                      <th className="px-3 py-2 font-medium">User</th>
+                      <th className="px-3 py-2 font-medium">Email</th>
                       <th className="px-3 py-2 font-medium">Role</th>
-                      <th className="px-3 py-2 font-medium">Joined</th>
+                      <th className="px-3 py-2 font-medium">Status</th>
                       <th className="px-3 py-2 font-medium">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {data.members.map(m => (
                       <tr key={m.id} className="border-b border-zinc-800/50">
-                        <td className="px-3 py-2 text-zinc-300">#{m.user_id}</td>
+                        <td className="px-3 py-2">
+                          <div className="flex items-center gap-2">
+                            <div className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-600/20 text-[9px] font-semibold text-blue-400">
+                              {m.full_name?.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2) || "?"}
+                            </div>
+                            <span className="text-zinc-300">{m.full_name || `User #${m.user_id}`}</span>
+                          </div>
+                        </td>
+                        <td className="px-3 py-2 text-zinc-400">{m.email || "—"}</td>
                         <td className="px-3 py-2">
                           <select value={m.role} onChange={e => handleRoleChange(m.user_id, e.target.value)}
                             className="rounded border border-zinc-800 bg-zinc-900 px-2 py-0.5 text-xs text-zinc-300 outline-none">
-                            <option value="workspace_admin">Admin</option>
-                            <option value="manager">Manager</option>
-                            <option value="analyst">Analyst</option>
-                            <option value="viewer">Viewer</option>
+                            <option value="workspace_admin">Admin</option><option value="manager">Manager</option>
+                            <option value="analyst">Analyst</option><option value="viewer">Viewer</option>
                           </select>
                         </td>
-                        <td className="px-3 py-2 text-zinc-500">{m.joined_at ? new Date(m.joined_at).toLocaleDateString() : "—"}</td>
+                        <td className="px-3 py-2">
+                          <span className={`flex items-center gap-1 ${m.status === "active" ? "text-emerald-400" : "text-zinc-500"}`}>
+                            <span className={`h-1.5 w-1.5 rounded-full ${m.status === "active" ? "bg-emerald-500" : "bg-zinc-600"}`} />
+                            {m.status}
+                          </span>
+                        </td>
                         <td className="px-3 py-2">
                           <button onClick={() => handleRemoveMember(m.user_id)}
-                            className="text-red-400 hover:text-red-300">
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
+                            className="text-zinc-600 hover:text-red-400"><Trash2 className="h-3.5 w-3.5" /></button>
                         </td>
                       </tr>
                     ))}
                     {data.members.length === 0 && (
-                      <tr><td colSpan={4} className="px-3 py-4 text-center text-zinc-600">No members</td></tr>
+                      <tr><td colSpan={5} className="px-3 py-4 text-center text-zinc-600">No members</td></tr>
                     )}
                   </tbody>
                 </table>
@@ -314,18 +400,16 @@ export default function WorkspaceSettingsPage() {
             </div>
           )}
 
-          {/* Tab: AI Settings */}
           {activeTab === "settings" && (
             <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-5">
-              <h2 className="text-sm font-medium uppercase tracking-wider text-zinc-500 mb-4">Workspace AI Settings</h2>
+              <h2 className="text-sm font-medium uppercase tracking-wider text-zinc-500 mb-4">AI Settings</h2>
               <div className="space-y-4">
                 <div>
                   <label className="text-xs text-zinc-400">Default AI Provider</label>
                   <select value={(data.settings?.ai_provider as string) || "gemini"}
                     onChange={e => handleToggleSetting("ai_provider", false)}
                     className="mt-1 w-full rounded-lg border border-zinc-800 bg-zinc-900/70 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-blue-600">
-                    <option value="gemini">Gemini</option>
-                    <option value="openai">OpenAI</option>
+                    <option value="gemini">Gemini</option><option value="openai">OpenAI</option>
                     <option value="claude">Claude (Future)</option>
                   </select>
                 </div>
@@ -350,7 +434,6 @@ export default function WorkspaceSettingsPage() {
             </div>
           )}
 
-          {/* Tab: Access Controls */}
           {activeTab === "access" && (
             <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-5">
               <h2 className="text-sm font-medium uppercase tracking-wider text-zinc-500 mb-4">Data Access Controls</h2>
@@ -378,7 +461,7 @@ export default function WorkspaceSettingsPage() {
           )}
         </>
       ) : (
-        <p className="text-sm text-zinc-600 text-center py-12">Select a workspace to manage.</p>
+        <p className="text-sm text-zinc-600 text-center py-12">Select a workspace to manage or create a new one.</p>
       )}
     </div>
   );

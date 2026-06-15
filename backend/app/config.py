@@ -26,6 +26,12 @@ class Settings(BaseSettings):
 
     cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
 
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_password: str = ""
+    smtp_from_email: str = "noreply@aura-intelligence.com"
+
     upload_dir: str = "app/uploads"
     vectorstore_dir: str = "app/vectorstore"
 
