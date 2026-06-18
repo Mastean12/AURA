@@ -86,6 +86,10 @@ class AnalyticsResponse(BaseModel):
     row_count: int
     column_count: int
     columns: list[ColumnStat]
+    dataset_type: str | None = None
+    target_variable: str | None = None
+    data_quality_score: float | None = None
+    data_quality_grade: str | None = None
 
 
 class ChartsRequest(BaseModel):

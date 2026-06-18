@@ -8,6 +8,8 @@ from sqlalchemy import select
 from app.database.database import get_session_factory
 from app.models.document import Document
 from app.models.schemas import AnalyticsResponse, ColumnStat
+from app.services.dataset_intelligence_service import analyze_dataset
+from app.services.data_quality_service import run_data_quality_audit
 
 logger = logging.getLogger(__name__)
 
@@ -118,9 +120,16 @@ async def get_analytics(doc_id: int) -> AnalyticsResponse:
 
     columns = [_analyze_column(df[col]) for col in df.columns]
 
+    dataset_intel = analyze_dataset(df)
+    data_quality = run_data_quality_audit(df)
+
     return AnalyticsResponse(
         doc_id=doc_id,
         row_count=len(df),
         column_count=len(df.columns),
         columns=columns,
+        dataset_type=dataset_intel.get("dataset_type"),
+        target_variable=dataset_intel.get("target_variable"),
+        data_quality_score=data_quality.get("overall_score"),
+        data_quality_grade=data_quality.get("grade"),
     )

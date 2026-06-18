@@ -200,8 +200,27 @@ async def generate_all_charts(doc_id: int) -> dict[str, Any] | None:
     if df is None:
         return None
 
-    first_col = df.columns[0]
-    result = await generate_charts(doc_id, first_col) or {}
+    # Intelligent column selection - skip IDs, dates, high-cardinality text
+    from app.services.dataset_intelligence_service import analyze_dataset
+    ds = analyze_dataset(df)
+    skip_types = {"identifier", "text"}
+    priority_types = {"kpi", "numeric", "categorical"}
+
+    best_col = None
+    for col_info in ds.get("columns", []):
+        if col_info.get("classification") in priority_types and col_info.get("classification") not in skip_types:
+            best_col = col_info["name"]
+            break
+    if not best_col:
+        for col_info in ds.get("columns", []):
+            if col_info.get("classification") not in skip_types:
+                best_col = col_info["name"]
+                break
+    if not best_col:
+        best_col = df.columns[0]
+
+    result = await generate_charts(doc_id, best_col) or {}
     result["correlation"] = _correlation_heatmap(df)
-    result["column"] = first_col
+    result["column"] = best_col
+    result["dataset_type"] = ds.get("dataset_type")
     return result
