@@ -115,17 +115,22 @@ async def generate_forecast(doc_id: int, column: str, periods: int = 30) -> dict
     trend_strength = round(min(abs(slope) * 10, 1), 2)
     confidence_avg = round(max(0, min(1, 1 - (rmse / (np.mean(values) + 1e-10)))), 2)
 
+    # Validation metrics
+    from app.services.forecast_intelligence_service import validate_forecast, explain_forecast
+    validation = validate_forecast(values, slope * np.arange(len(values)) + intercept)
+
     explanation_prompt = (
         f"The dataset column '{column}' shows a {trend_direction} trend with {trend_strength*100:.0f}% strength. "
         f"Historical data has {len(values)} points. "
         f"The forecast projects {periods} periods ahead. "
         f"Average confidence: {confidence_avg:.0%}. "
+        f"Model validation: R2={validation.get('r2', 'N/A')}, RMSE={validation.get('rmse', 'N/A')}. "
         "Provide a 2-3 sentence business explanation of what this forecast means."
     )
     try:
         explanation = await generate_response_async(explanation_prompt, request_type="forecasting")
     except Exception:
-        explanation = f"The forecast indicates a {trend_direction}ward trend for {column} over the next {periods} periods."
+        explanation = explain_forecast(trend_direction, trend_strength, confidence_avg, column, periods, "linear_regression")
 
     return {
         "column": column,
@@ -135,6 +140,7 @@ async def generate_forecast(doc_id: int, column: str, periods: int = 30) -> dict
         "trend_strength": trend_strength,
         "confidence_avg": confidence_avg,
         "explanation": explanation,
+        "validation": validation,
     }
 
 

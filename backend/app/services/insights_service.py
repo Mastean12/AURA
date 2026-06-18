@@ -14,34 +14,62 @@ logger = logging.getLogger(__name__)
 
 
 def _df_to_summary(df: pd.DataFrame) -> str:
-    info = [f"Rows: {len(df)}, Columns: {len(df.columns)}"]
-    for col in df.columns:
-        dtype = "numeric" if pd.api.types.is_numeric_dtype(df[col]) else "categorical"
-        missing = int(df[col].isna().sum())
-        info.append(f"  {col} ({dtype}) missing={missing}/{len(df)}")
-        if pd.api.types.is_numeric_dtype(df[col]):
-            clean = df[col].dropna()
-            if len(clean) > 0:
-                info.append(f"    range=[{clean.min()}, {clean.max()}], mean={clean.mean():.2f}")
-        else:
-            tops = df[col].dropna().value_counts().head(5)
-            info.append(f"    top: {dict(tops)}")
-    return "\n".join(info)
+    from app.services.dataset_intelligence_service import analyze_dataset
+    from app.services.data_quality_service import run_data_quality_audit
+    from app.services.business_analytics_service import run_business_analytics, compute_descriptive_stats
+    from app.services.forecast_intelligence_service import check_forecast_eligibility
+
+    ds = analyze_dataset(df)
+    dq = run_data_quality_audit(df)
+    ba = run_business_analytics(df)
+
+    lines = [
+        f"Dataset: {ds['row_count']} rows x {ds['column_count']} columns",
+        f"Type: {ds['dataset_type']}",
+        f"Target: {ds['target_variable'] or 'None detected'}",
+        f"Data Quality Score: {dq['overall_score']}/100 ({dq['grade']})",
+        f"KPIs: {', '.join(ds['kpi_columns'][:5]) or 'None'}",
+    ]
+
+    if dq.get("issues"):
+        top_issues = dq["issues"][:3]
+        lines.append(f"Data Issues: {'; '.join(i['type'] + ' in ' + (i.get('column','') or '') for i in top_issues)}")
+
+    if ba.get("business_questions"):
+        lines.append(f"Key Questions: {' | '.join(ba['business_questions'][:3])}")
+
+    if ba.get("correlations", {}).get("strong_correlations"):
+        strong = ba["correlations"]["strong_correlations"][:3]
+        for s in strong:
+            lines.append(f"  Correlation: {s['col_a']} vs {s['col_b']} = {s['correlation']} ({s['direction']})")
+
+    cols_summary = []
+    for col_info in ds.get("columns", [])[:15]:
+        cls = col_info.get("classification", "")
+        if cls == "identifier":
+            continue
+        cols_summary.append(f"  {col_info['name']} ({cls})")
+
+    lines.append("Key Columns:")
+    lines.extend(cols_summary[:10])
+
+    return "\n".join(lines)
 
 
 def _build_insights_prompt(df_summary: str) -> str:
-    return f"""You are an AI business analyst. Analyze this dataset and return ONLY valid JSON:
+    return f"""You are an AI Senior Business Intelligence Analyst and Executive Advisor. Based on the dataset analysis below, generate strategic business insights.
 
+Return ONLY valid JSON:
 {{
-  "executive_summary": "2-3 sentence executive overview",
-  "key_findings": ["finding 1", "finding 2", "finding 3"],
-  "risks": ["risk 1", "risk 2"],
-  "opportunities": ["opportunity 1", "opportunity 2"],
-  "recommendations": ["recommendation 1", "recommendation 2"],
+  "executive_summary": "2-3 sentence executive overview covering what happened, why it matters, and what leadership should know.",
+  "key_findings": ["Finding 1 with specific numbers", "Finding 2 with business impact", "Finding 3"],
+  "risks": ["Risk 1 with business consequence", "Risk 2"],
+  "opportunities": ["Opportunity 1 with expected benefit", "Opportunity 2"],
+  "recommendations": ["Specific actionable recommendation 1", "Recommendation 2"],
   "confidence_score": 85
 }}
 
-Dataset analysis:
+Dataset Analysis:
 {df_summary}
 """
 

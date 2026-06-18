@@ -1,10 +1,18 @@
+import io
 import logging
 
+import pandas as pd
+
+from app.database.database import get_session_factory
+from app.models.document import Document
 from app.services.executive_summary_service import generate_executive_summary_enhanced
 from app.services.risk_analysis_service import analyze_risks
 from app.services.opportunity_analysis_service import analyze_opportunities
 from app.services.business_health_service import calculate_business_health
 from app.services.recommendation_engine import generate_recommendations
+from app.services.executive_intelligence_v2 import generate_enhanced_executive_intelligence
+from app.services.analytics_pipeline import run_full_analytics_pipeline
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +62,7 @@ async def generate_executive_intelligence(doc_ids: list[int]) -> dict:
         sum(v for v in confidence_scores.values() if isinstance(v, (int, float))) / 5, 2
     )
 
-    return {
+    result = {
         "executive_summary": summary_result,
         "business_health": health_result,
         "risks": risks_result.get("risks", []),
@@ -64,3 +72,25 @@ async def generate_executive_intelligence(doc_ids: list[int]) -> dict:
         "confidence_scores": confidence_scores,
         "overall_confidence": overall_confidence,
     }
+
+    # Enhance with v2 pipeline if single doc has tabular data
+    if len(doc_ids) == 1:
+        try:
+            async with get_session_factory()() as db:
+                r = await db.execute(select(Document).where(Document.id == doc_ids[0]))
+                doc = r.scalar_one_or_none()
+            if doc and doc.content and doc.content.count(",") > 5:
+                df = pd.read_csv(io.StringIO(doc.content))
+                if len(df.columns) >= 2:
+                    v2_result = await run_full_analytics_pipeline(doc_ids[0], df)
+                    ei = v2_result.get("executive_intelligence", {})
+                    if ei.get("findings"):
+                        result["v2_findings"] = ei.get("findings", [])
+                    if ei.get("business_health"):
+                        result["v2_health"] = ei.get("business_health", {})
+                    result["data_quality"] = v2_result.get("data_quality", {})
+                    result["dataset_intelligence"] = v2_result.get("dataset_intelligence", {})
+        except Exception as e:
+            logger.warning("V2 pipeline enhancement failed: %s", e)
+
+    return result
