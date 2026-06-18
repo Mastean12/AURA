@@ -65,26 +65,23 @@ def _classify_anomaly(values: np.ndarray, idx: int) -> str:
     return "outlier"
 
 
-async def _generate_anomaly_explanation(values: np.ndarray, idx: int, anomaly_type: str, severity: str) -> str:
+def _format_anomaly_text(values: np.ndarray, idx: int, anomaly_type: str, severity: str) -> str:
     val = values[idx]
     prev = values[idx - 1] if idx > 0 else val
     pct_change = ((val - prev) / (prev + 1e-10)) * 100
     direction = "increased" if pct_change > 0 else "decreased"
+    return f"Index {idx}: value={val:.2f}, {direction} by {abs(pct_change):.1f}% from {prev:.2f}, type={anomaly_type}, severity={severity}"
 
-    prompt = (
-        f"In a business dataset, value at index {idx} is {val:.2f}, "
-        f"which {direction} by {abs(pct_change):.1f}% from the previous value of {prev:.2f}. "
-        f"Type: {anomaly_type}. Severity: {severity}. "
-        "Provide a 1-sentence business explanation of what might have caused this."
-    )
-    try:
-        return await generate_response_async(prompt, request_type="anomaly_detection")
-    except Exception:
-        if anomaly_type == "spike":
-            return f"Unexpected surge: value {direction} by {abs(pct_change):.1f}%."
-        elif anomaly_type == "drop":
-            return f"Unexpected decline: value {direction} by {abs(pct_change):.1f}%."
-        return f"Unusual value detected: {val:.2f} ({direction} {abs(pct_change):.1f}%)."
+def _fallback_explanation(values: np.ndarray, idx: int, anomaly_type: str) -> str:
+    val = values[idx]
+    prev = values[idx - 1] if idx > 0 else val
+    pct_change = ((val - prev) / (prev + 1e-10)) * 100
+    direction = "increased" if pct_change > 0 else "decreased"
+    if anomaly_type == "spike":
+        return f"Unexpected surge: value {direction} by {abs(pct_change):.1f}%."
+    elif anomaly_type == "drop":
+        return f"Unexpected decline: value {direction} by {abs(pct_change):.1f}%."
+    return f"Unusual value detected: {val:.2f} ({direction} {abs(pct_change):.1f}%)."
 
 
 async def detect_anomalies(doc_id: int, column: str, severity_filter: str | None = None) -> dict:
@@ -124,7 +121,6 @@ async def detect_anomalies(doc_id: int, column: str, severity_filter: str | None
             continue
 
         anomaly_type = _classify_anomaly(values, i)
-        explanation = await _generate_anomaly_explanation(values, i, anomaly_type, severity)
 
         expected = np.mean([values[max(0, i - 3):i].mean() if i > 0 else values[i],
                            values[i + 1:min(len(values), i + 4)].mean() if i < len(values) - 1 else values[i]])
@@ -140,8 +136,37 @@ async def detect_anomalies(doc_id: int, column: str, severity_filter: str | None
             "deviation": round(float(deviation), 1),
             "severity": severity,
             "type": anomaly_type,
-            "explanation": explanation,
+            "explanation": "",  # Will be filled in batch
         })
+
+    # Batch explain all anomalies in a single AI call
+    if anomalies:
+        anomaly_descriptions = [
+            _format_anomaly_text(values, a["index"], a["type"], a["severity"])
+            for a in anomalies[:20]
+        ]
+        batch_prompt = (
+            "Analyze these anomalies in a business dataset:\n" +
+            "\n".join(anomaly_descriptions) +
+            "\n\nFor each, provide a 1-sentence business explanation of the likely cause. "
+            "Return exactly one explanation per line, in the same order."
+        )
+        try:
+            import asyncio
+            raw = await asyncio.wait_for(
+                generate_response_async(batch_prompt, request_type="anomaly_detection"),
+                timeout=30,
+            )
+            lines = [l.strip() for l in raw.split("\n") if l.strip()]
+            for i, a in enumerate(anomalies[:20]):
+                if i < len(lines):
+                    a["explanation"] = lines[i][:200]
+        except Exception:
+            pass
+        # Fill remaining with fallback
+        for a in anomalies[:20]:
+            if not a["explanation"]:
+                a["explanation"] = _fallback_explanation(values, a["index"], a["type"])
 
     anomalies.sort(key=lambda a: {"high": 0, "medium": 1, "low": 2}[a["severity"]])
 
