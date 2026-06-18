@@ -57,6 +57,10 @@ export interface AnalyticsResponse {
   row_count: number;
   column_count: number;
   columns: ColumnStat[];
+  dataset_type?: string | null;
+  target_variable?: string | null;
+  data_quality_score?: number | null;
+  data_quality_grade?: string | null;
 }
 
 export interface ChartItem {
