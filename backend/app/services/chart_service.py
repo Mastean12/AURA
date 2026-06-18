@@ -111,19 +111,28 @@ def _correlation_heatmap(df: pd.DataFrame) -> dict | None:
     }
 
 
-def _compute_feature_importance(df: pd.DataFrame, target: str) -> list[dict]:
+def _compute_feature_importance(df: pd.DataFrame, target: str, skip_set: set | None = None) -> list[dict]:
     """
     Compute statistical feature importance of every column against the target.
     Returns list of {name, importance, method} sorted by importance descending.
     """
     import numpy as np
+    from app.services.dataset_intelligence_service import analyze_dataset
+
+    if skip_set is None:
+        skip_set = {"identifier", "text"}
+
+    # Classify columns to know which to skip
+    ds = analyze_dataset(df)
+    col_map = {c["name"]: c.get("classification", "") for c in ds.get("columns", [])}
 
     results = []
     target_is_num = pd.api.types.is_numeric_dtype(df[target])
-    target_vals = df[target].dropna()
 
     for col in df.columns:
         if col == target:
+            continue
+        if col_map.get(col, "") in skip_set:
             continue
 
         col_data = df[col].dropna()
@@ -224,7 +233,7 @@ async def generate_smart_charts(doc_id: int) -> dict[str, Any]:
         scored.sort(reverse=True)
         rankings = [{"name": s[1], "importance": s[0], "method": "column_type"} for s in scored[:6]]
     else:
-        rankings = _compute_feature_importance(df, is_target)
+        rankings = _compute_feature_importance(df, is_target, skip_set=skip)
         # If few features found, pad with highest-column-type-scored remaining
         if len(rankings) < 6:
             existing_names = {r["name"] for r in rankings}
