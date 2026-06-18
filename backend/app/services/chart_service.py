@@ -200,27 +200,46 @@ async def generate_all_charts(doc_id: int) -> dict[str, Any] | None:
     if df is None:
         return None
 
-    # Intelligent column selection - skip IDs, dates, high-cardinality text
     from app.services.dataset_intelligence_service import analyze_dataset
     ds = analyze_dataset(df)
-    skip_types = {"identifier", "text"}
-    priority_types = {"kpi", "numeric", "categorical"}
 
-    best_col = None
+    # Score each column for chart value - prefer business-relevant charts
+    scored: list[tuple[float, str]] = []
     for col_info in ds.get("columns", []):
-        if col_info.get("classification") in priority_types and col_info.get("classification") not in skip_types:
-            best_col = col_info["name"]
-            break
-    if not best_col:
-        for col_info in ds.get("columns", []):
-            if col_info.get("classification") not in skip_types:
-                best_col = col_info["name"]
-                break
-    if not best_col:
-        best_col = df.columns[0]
+        cls = col_info.get("classification", "")
+        name = col_info["name"]
+        score = 0.0
+
+        if cls in ("identifier", "text"):
+            continue
+        if cls == "date":
+            score = 3.0
+        elif cls == "kpi":
+            score = 5.0  # Highest priority
+        elif cls == "numeric":
+            score = 4.0
+        elif cls == "geographic":
+            score = 3.5
+        elif cls == "categorical":
+            nunique = col_info.get("nunique", 0)
+            if nunique <= 2:
+                score = 1.0  # Binary categories (gender, yes/no) - low value
+            elif nunique <= 10:
+                score = 3.0
+            else:
+                score = 2.0
+
+        if col_info.get("is_target"):
+            score += 2.0  # Boost target variables
+
+        scored.append((score, name))
+
+    scored.sort(reverse=True)
+    best_col = scored[0][1] if scored else df.columns[0]
 
     result = await generate_charts(doc_id, best_col) or {}
     result["correlation"] = _correlation_heatmap(df)
     result["column"] = best_col
     result["dataset_type"] = ds.get("dataset_type")
+    result["chart_selection"] = [{"column": c[1], "score": c[0]} for c in scored[:5]]
     return result

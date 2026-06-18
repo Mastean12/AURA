@@ -357,7 +357,7 @@ export default function AnalyticsPage() {
                       <h3 className="mb-2 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wider text-zinc-500">
                         <Icon className="h-3.5 w-3.5" />{label}
                       </h3>
-                      <ChartFrame data={charts[key as keyof typeof charts] as Record<string, unknown>} />
+                      <PlotlyChart id={key} data={charts[key as keyof typeof charts] as Record<string, unknown>} />
                     </div>
                   ) : null
                 ))}
@@ -522,48 +522,45 @@ function InsightCard({ icon: Icon, title, items, color }: { icon: React.ElementT
   );
 }
 
-function ChartFrame({ data }: { data: Record<string, unknown> | undefined }) {
-  if (!data) return <div className="h-32 rounded-lg bg-zinc-900/70" />;
-  const plotlyData = (data.data as Record<string, unknown>[]);
-  if (!plotlyData?.length) return <div className="h-32 rounded-lg bg-zinc-900/70" />;
-  const trace = plotlyData[0];
-  const type = trace?.type as string;
-  const labels = (trace?.labels as string[]) ?? (trace?.x as string[]) ?? [];
-  const values = (trace?.values as number[]) ?? (trace?.y as number[]) ?? [];
-  if (!labels.length && !values.length) return <div className="h-32 rounded-lg bg-zinc-900/70" />;
-  const maxVal = Math.max(...values, 1);
-  const colors = ["#636efa", "#ef553b", "#00cc96", "#ab63fa", "#ffa15a", "#19d3f3"];
+let _plotlyLoaded = false;
+let _plotlyQueue: Array<() => void> = [];
 
-  if (type === "pie") {
-    const total = values.reduce((a, b) => a + b, 0);
-    return (
-      <div className="flex flex-wrap items-center justify-center gap-3 py-2">
-        {labels.slice(0, 8).map((l, i) => (
-          <div key={l} className="flex items-center gap-1.5 text-xs">
-            <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: colors[i % colors.length] }} />
-            <span className="text-zinc-300">{l}</span>
-            <span className="text-zinc-500">{((values[i] / total) * 100).toFixed(0)}%</span>
-          </div>
-        ))}
-      </div>
-    );
-  }
+function _loadPlotly(cb: () => void) {
+  if ((window as any).Plotly) { cb(); return; }
+  _plotlyQueue.push(cb);
+  if (_plotlyLoaded) return;
+  _plotlyLoaded = true;
+  const s = document.createElement("script");
+  s.src = "https://cdn.plot.ly/plotly-2.35.2.min.js";
+  s.onload = () => { _plotlyQueue.forEach(f => f()); _plotlyQueue = []; };
+  document.head.appendChild(s);
+}
 
-  if (type === "heatmap") return <HeatmapFrame data={data} />;
+function PlotlyChart({ id, data }: { id: string; data: Record<string, unknown> | undefined }) {
+  const chartRef = useRef<HTMLDivElement>(null);
 
-  return (
-    <div className="space-y-1 py-1">
-      {labels.slice(0, 10).map((l, i) => (
-        <div key={l} className="flex items-center gap-2 text-xs">
-          <span className="w-16 truncate text-zinc-400">{l}</span>
-          <div className="flex-1 overflow-hidden rounded-full bg-zinc-800">
-            <div className="h-2 rounded-full" style={{ width: `${(values[i] / maxVal) * 100}%`, backgroundColor: colors[i % colors.length] }} />
-          </div>
-          <span className="w-8 text-right text-zinc-300">{values[i]}</span>
-        </div>
-      ))}
-    </div>
-  );
+  useEffect(() => {
+    if (!data || !chartRef.current) return;
+    const el = chartRef.current;
+    _loadPlotly(() => {
+      if (!el || !(window as any).Plotly) return;
+      try {
+        const layout = {
+          ...((data.layout as Record<string, any>) || {}),
+          paper_bgcolor: "rgba(0,0,0,0)", plot_bgcolor: "rgba(0,0,0,0)",
+          font: { color: "#a1a1aa", size: 10, family: "-apple-system, BlinkMacSystemFont, sans-serif" },
+          xaxis: { ...(((data.layout as any)?.xaxis) || {}), gridcolor: "#27272a", zerolinecolor: "#27272a" },
+          yaxis: { ...(((data.layout as any)?.yaxis) || {}), gridcolor: "#27272a", zerolinecolor: "#27272a" },
+          margin: { l: 40, r: 10, t: 10, b: 40 },
+          showlegend: false,
+        };
+        (window as any).Plotly.newPlot(el, data.data, layout, { responsive: true, displayModeBar: false });
+      } catch {}
+    });
+    return () => { if (el) (window as any).Plotly?.purge?.(el); };
+  }, [data]);
+
+  return <div ref={chartRef} className="h-52 w-full" />;
 }
 
 function HeatmapFrame({ data }: { data: Record<string, unknown> }) {
