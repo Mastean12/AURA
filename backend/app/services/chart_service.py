@@ -165,10 +165,10 @@ async def generate_smart_charts(doc_id: int) -> dict[str, Any]:
         scored.append((score, name, nunique))
 
     scored.sort(reverse=True)
-    top_5 = scored[:5]
+    top_6 = scored[:6]
 
     charts = []
-    for score, col, nunique in top_5:
+    for score, col, nunique in top_6:
         chart_type = _best_chart_type(df, col, nunique)
         charts.append(_make_chart(df, col, chart_type, 280))
 

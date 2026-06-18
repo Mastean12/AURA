@@ -100,16 +100,14 @@ export default function AnalyticsPage() {
     if (!charts || !selectedDoc) return;
     setChartInsightsLoading(true);
     setChartInsights({});
-    const chartTypes = ["bar", "pie", "line", "area", "histogram", "distribution"];
     const results: Record<string, string> = {};
-    for (const ct of chartTypes) {
-      if (charts[ct as keyof ChartsResponse]) {
-        try {
-          const res = await getChartInsight(selectedDoc, ct, charts.column);
-          results[ct] = res.insight;
-        } catch {
-          results[ct] = "Chart insight temporarily unavailable.";
-        }
+    const items = (charts as any).charts || [];
+    for (const chart of items) {
+      try {
+        const res = await getChartInsight(selectedDoc, chart.chart_type, chart.column);
+        results[chart.column] = res.insight;
+      } catch {
+        results[chart.column] = "Chart insight temporarily unavailable.";
       }
     }
     setChartInsights(results);
@@ -379,12 +377,12 @@ export default function AnalyticsPage() {
                 <h2 className="text-sm font-medium uppercase tracking-wider text-zinc-500">Chart Insight Cards</h2>
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
-                {Object.entries(chartInsights).map(([chartType, insight]) => (
-                  <div key={chartType} className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-4">
+                  {Object.entries(chartInsights).map(([column, insight]) => (
+                  <div key={column} className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-4">
                     <div className="flex items-center gap-2 mb-2">
                       <BarChart3 className="h-4 w-4 text-zinc-400" />
                       <h3 className="text-xs font-medium uppercase tracking-wider text-zinc-500">
-                        {chartType.charAt(0).toUpperCase() + chartType.slice(1)} Insight
+                        {column} Insight
                       </h3>
                     </div>
                     <p className="text-xs leading-relaxed text-zinc-300">{insight}</p>
