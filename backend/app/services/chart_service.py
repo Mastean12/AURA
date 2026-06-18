@@ -111,10 +111,95 @@ def _correlation_heatmap(df: pd.DataFrame) -> dict | None:
     }
 
 
+def _compute_feature_importance(df: pd.DataFrame, target: str) -> list[dict]:
+    """
+    Compute statistical feature importance of every column against the target.
+    Returns list of {name, importance, method} sorted by importance descending.
+    """
+    import numpy as np
+
+    results = []
+    target_is_num = pd.api.types.is_numeric_dtype(df[target])
+    target_vals = df[target].dropna()
+
+    for col in df.columns:
+        if col == target:
+            continue
+
+        col_data = df[col].dropna()
+        if len(col_data) < 5:
+            continue
+
+        col_is_num = pd.api.types.is_numeric_dtype(df[col])
+        importance = 0.0
+        method = "none"
+
+        # Find common indices where both exist
+        common = df[[col, target]].dropna()
+        if len(common) < 5:
+            continue
+
+        if col_is_num and target_is_num:
+            # Pearson correlation for numeric vs numeric
+            try:
+                r = common[col].corr(common[target])
+                if not np.isnan(r):
+                    importance = abs(r)
+                    method = f"pearson r={r:.3f}"
+            except Exception:
+                pass
+
+        elif col_is_num and not target_is_num:
+            # ANOVA-style: how well does the numeric feature separate the target groups
+            try:
+                groups = [g.dropna().values for _, g in common.groupby(target)[col]]
+                if len(groups) >= 2:
+                    from scipy.stats import f_oneway
+                    f_stat, p_val = f_oneway(*groups)
+                    if not np.isnan(f_stat) and f_stat > 0:
+                        importance = min(1.0, 1.0 - (p_val / 10.0) if not np.isnan(p_val) else 0.5)
+                        method = f"anova F={f_stat:.1f}, p={p_val:.4f}"
+            except Exception:
+                pass
+
+        elif not col_is_num and target_is_num:
+            # Correlation ratio: how much of target variance is explained by category
+            try:
+                grand_mean = common[target].mean()
+                ss_between = sum(len(g) * (g.mean() - grand_mean) ** 2 for _, g in common.groupby(col)[target])
+                ss_total = sum((common[target] - grand_mean) ** 2)
+                eta_sq = ss_between / ss_total if ss_total > 0 else 0
+                importance = min(1.0, float(eta_sq))
+                method = f"eta_sq={eta_sq:.3f}"
+            except Exception:
+                pass
+
+        else:
+            # Categorical vs categorical: Cramer's V approximation
+            try:
+                ct = pd.crosstab(common[col], common[target])
+                if ct.size > 0:
+                    chi2 = (ct.values - ct.values.mean()) ** 2 / (ct.values.mean() + 1e-10)
+                    chi2_sum = chi2.sum()
+                    n = ct.values.sum()
+                    k = min(ct.shape) - 1
+                    v = np.sqrt(chi2_sum / (n * max(k, 1))) if n > 0 and k > 0 else 0
+                    importance = min(1.0, float(v))
+                    method = f"cramer_v={v:.3f}"
+            except Exception:
+                pass
+
+        if importance > 0:
+            results.append({"name": col, "importance": round(importance, 4), "method": method})
+
+    results.sort(key=lambda r: r["importance"], reverse=True)
+    return results
+
+
 async def generate_smart_charts(doc_id: int) -> dict[str, Any]:
     """
-    Generate charts for the top 5 most impactful features.
-    Each feature gets the single most appropriate chart type.
+    Generate charts for the top 6 most important features.
+    Uses statistical feature importance (correlation, ANOVA, eta-squared, Cramer's V).
     """
     df = await _parse_document(doc_id)
     if df is None:
@@ -123,54 +208,57 @@ async def generate_smart_charts(doc_id: int) -> dict[str, Any]:
     from app.services.dataset_intelligence_service import analyze_dataset
     ds = analyze_dataset(df)
     is_target = ds.get("target_variable")
-    numeric_cols = ds.get("numeric_columns", [])
-    kpi_cols = ds.get("kpi_columns", [])
-    cat_cols = ds.get("categorical_columns", [])
-    date_cols = ds.get("date_columns", [])
-    geo_cols = ds.get("geographic_columns", [])
     skip = {"identifier", "text"}
 
-    # Score all columns for business impact
-    scored: list[tuple[float, str]] = []
-    for col_info in ds.get("columns", []):
-        name = col_info["name"]
-        cls = col_info.get("classification", "")
-        if cls in skip:
-            continue
-        if name == is_target:
-            continue  # Don't chart the target itself
+    if not is_target:
+        # Fall back to column scoring when no target is detected
+        scored: list[tuple[float, str]] = []
+        for col_info in ds.get("columns", []):
+            name = col_info["name"]
+            cls = col_info.get("classification", "")
+            if cls in skip:
+                continue
+            nunique = col_info.get("nunique", 0)
+            score = 9.0 if cls == "kpi" else 7.0 if cls == "numeric" else 6.0 if cls == "date" else 5.0 if cls == "geographic" else 4.0 if nunique <= 10 else 2.0
+            scored.append((score, name, nunique))
+        scored.sort(reverse=True)
+        rankings = [{"name": s[1], "importance": s[0], "method": "column_type"} for s in scored[:6]]
+    else:
+        rankings = _compute_feature_importance(df, is_target)
+        # If few features found, pad with highest-column-type-scored remaining
+        if len(rankings) < 6:
+            existing_names = {r["name"] for r in rankings}
+            for col_info in ds.get("columns", []):
+                if len(rankings) >= 6:
+                    break
+                name = col_info["name"]
+                if name == is_target or name in existing_names or col_info.get("classification") in skip:
+                    continue
+                rankings.append({"name": name, "importance": 0.0, "method": "not_available"})
 
-        score = 0.0
-        nunique = col_info.get("nunique", 0)
-        if cls == "kpi":
-            score = 9.0
-        elif name in numeric_cols:
-            score = 7.0
-        elif cls == "date":
-            score = 6.0
-        elif cls == "geographic":
-            score = 5.0
-        elif cls == "categorical":
-            score = 4.0 if nunique <= 10 else 2.0
-
-        # Boost columns strongly correlated with target
-        if is_target and pd.api.types.is_numeric_dtype(df[name]) and pd.api.types.is_numeric_dtype(df[is_target]):
-            try:
-                corr_val = df[name].corr(df[is_target])
-                if not pd.isna(corr_val):
-                    score += abs(corr_val) * 5
-            except Exception:
-                pass
-
-        scored.append((score, name, nunique))
-
-    scored.sort(reverse=True)
-    top_6 = scored[:6]
+    top_6 = rankings[:6]
 
     charts = []
-    for score, col, nunique in top_6:
+    for r in top_6:
+        col = r["name"]
+        nunique = int(df[col].nunique())
         chart_type = _best_chart_type(df, col, nunique)
-        charts.append(_make_chart(df, col, chart_type, 280))
+        chart = _make_chart(df, col, chart_type, 280)
+        chart["importance"] = r["importance"]
+        chart["importance_method"] = r["method"]
+        # Update chart title with importance information
+        importance_pct = round(r["importance"] * 100, 1)
+        fig_data = chart.get("data", {})
+        if fig_data:
+            layout = fig_data.get("layout", {})
+            layout["title"] = f"{col} — Importance: {importance_pct}%"
+            fig_data["layout"] = layout
+            chart["data"] = fig_data
+            # Re-render HTML with updated title
+            import plotly.graph_objects as go
+            fig = go.Figure(fig_data)
+            chart["html"] = _to_html(fig, 280)
+        charts.append(chart)
 
     correlation = _correlation_heatmap(df)
 
@@ -178,7 +266,7 @@ async def generate_smart_charts(doc_id: int) -> dict[str, Any]:
         "charts": charts,
         "correlation": correlation,
         "target_variable": is_target,
-        "total_columns_evaluated": len(scored),
+        "total_columns_evaluated": len(rankings),
     }
 
 
