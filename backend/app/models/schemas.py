@@ -97,16 +97,26 @@ class ChartsRequest(BaseModel):
     column: str
 
 
+class ChartItem(BaseModel):
+    column: str
+    chart_type: str
+    nunique: int
+    data: dict
+    html: str
+
+
 class ChartsResponse(BaseModel):
     doc_id: int
     column: str
-    bar: dict
-    pie: dict
-    line: dict
+    bar: dict | None = None
+    pie: dict | None = None
+    line: dict | None = None
     area: dict | None = None
     histogram: dict | None = None
     distribution: dict | None = None
     correlation: dict | None = None
+    charts: list[ChartItem] | None = None
+    target_variable: str | None = None
 
 
 class InsightsResponse(BaseModel):

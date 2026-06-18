@@ -333,43 +333,39 @@ export default function AnalyticsPage() {
             </div>
           )}
 
-          {/* SECTION 5: Visualizations */}
+          {/* SECTION 5: Visualizations — Smart Charts */}
           {chartsLoading ? (
             <div className="h-64 animate-pulse rounded-xl bg-zinc-800/50" />
           ) : charts && (
             <div>
               <div className="mb-3 flex items-center gap-2">
                 <BarChart3 className="h-5 w-5 text-zinc-400" />
-                <h2 className="text-sm font-medium uppercase tracking-wider text-zinc-500">Visualizations</h2>
-                <span className="text-xs text-zinc-600">— {charts.column}</span>
-              </div>
-              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                {[
-                  { key: "bar", label: "Bar Chart", icon: BarChart3 },
-                  { key: "pie", label: "Pie Chart", icon: PieChart },
-                  { key: "line", label: "Line Chart", icon: TrendingUp },
-                  { key: "area", label: "Area Chart", icon: TrendingUp },
-                  { key: "histogram", label: "Histogram", icon: BarChart3 },
-                  { key: "distribution", label: "Distribution", icon: BarChart3 },
-                ].map(({ key, label, icon: Icon }) => (
-                  charts[key as keyof typeof charts] ? (
-                    <div key={key} className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-4">
-                      <h3 className="mb-2 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wider text-zinc-500">
-                        <Icon className="h-3.5 w-3.5" />{label}
-                      </h3>
-                      <PlotlyChart id={key} data={charts[key as keyof typeof charts] as Record<string, unknown>} />
-                    </div>
-                  ) : null
-                ))}
-                {charts.correlation && (
-                  <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-4 sm:col-span-2 xl:col-span-3">
-                    <h3 className="mb-2 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wider text-zinc-500">
-                      <BarChart3 className="h-3.5 w-3.5" />Correlation Heatmap
-                    </h3>
-                    <CorrelationFrame data={charts.correlation} />
-                  </div>
+                <h2 className="text-sm font-medium uppercase tracking-wider text-zinc-500">Key Business Drivers</h2>
+                {charts.target_variable && (
+                  <span className="text-xs text-zinc-600">Target: {charts.target_variable}</span>
                 )}
               </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                {(charts.charts || []).map((chart: { column: string; chart_type: string; html: string; nunique: number }, i: number) => (
+                  <div key={i} className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-3">
+                    <h3 className="mb-1 text-xs font-medium uppercase tracking-wider text-zinc-500 flex items-center gap-1.5">
+                      <BarChart3 className="h-3.5 w-3.5" />
+                      {chart.column}
+                      <span className="text-[10px] text-zinc-600 font-normal lowercase">({chart.chart_type})</span>
+                    </h3>
+                    <iframe srcDoc={chart.html} className="w-full h-64 rounded-lg border-0" title={chart.column} />
+                  </div>
+                ))}
+                {(!charts.charts || charts.charts.length === 0) && (
+                  <p className="text-xs text-zinc-600 col-span-2 text-center py-8">No meaningful charts to display for this dataset.</p>
+                )}
+              </div>
+              {(charts.correlation as { html?: string } | null)?.html && (
+                <div className="mt-4 rounded-xl border border-zinc-800 bg-zinc-900/50 p-3">
+                  <h3 className="mb-1 text-xs font-medium uppercase tracking-wider text-zinc-500">Correlation Heatmap</h3>
+                  <iframe srcDoc={(charts.correlation as { html?: string }).html || ""} className="w-full h-80 rounded-lg border-0" title="Correlation" />
+                </div>
+              )}
             </div>
           )}
 
@@ -522,47 +518,6 @@ function InsightCard({ icon: Icon, title, items, color }: { icon: React.ElementT
   );
 }
 
-let _plotlyLoaded = false;
-let _plotlyQueue: Array<() => void> = [];
-
-function _loadPlotly(cb: () => void) {
-  if ((window as any).Plotly) { cb(); return; }
-  _plotlyQueue.push(cb);
-  if (_plotlyLoaded) return;
-  _plotlyLoaded = true;
-  const s = document.createElement("script");
-  s.src = "https://cdn.plot.ly/plotly-2.35.2.min.js";
-  s.onload = () => { _plotlyQueue.forEach(f => f()); _plotlyQueue = []; };
-  document.head.appendChild(s);
-}
-
-function PlotlyChart({ id, data }: { id: string; data: Record<string, unknown> | undefined }) {
-  const chartRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!data || !chartRef.current) return;
-    const el = chartRef.current;
-    _loadPlotly(() => {
-      if (!el || !(window as any).Plotly) return;
-      try {
-        const layout = {
-          ...((data.layout as Record<string, any>) || {}),
-          paper_bgcolor: "rgba(0,0,0,0)", plot_bgcolor: "rgba(0,0,0,0)",
-          font: { color: "#a1a1aa", size: 10, family: "-apple-system, BlinkMacSystemFont, sans-serif" },
-          xaxis: { ...(((data.layout as any)?.xaxis) || {}), gridcolor: "#27272a", zerolinecolor: "#27272a" },
-          yaxis: { ...(((data.layout as any)?.yaxis) || {}), gridcolor: "#27272a", zerolinecolor: "#27272a" },
-          margin: { l: 40, r: 10, t: 10, b: 40 },
-          showlegend: false,
-        };
-        (window as any).Plotly.newPlot(el, data.data, layout, { responsive: true, displayModeBar: false });
-      } catch {}
-    });
-    return () => { if (el) (window as any).Plotly?.purge?.(el); };
-  }, [data]);
-
-  return <div ref={chartRef} className="h-52 w-full" />;
-}
-
 function HeatmapFrame({ data }: { data: Record<string, unknown> }) {
   const trace = (data.data as Record<string, unknown>[])?.[0];
   const z = trace?.z as number[][];
@@ -598,3 +553,4 @@ function HeatmapFrame({ data }: { data: Record<string, unknown> }) {
 function CorrelationFrame({ data }: { data: Record<string, unknown> }) {
   return <HeatmapFrame data={data} />;
 }
+

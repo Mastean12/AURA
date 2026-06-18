@@ -59,16 +59,26 @@ export interface AnalyticsResponse {
   columns: ColumnStat[];
 }
 
+export interface ChartItem {
+  column: string;
+  chart_type: string;
+  nunique: number;
+  data: Record<string, unknown>;
+  html: string;
+}
+
 export interface ChartsResponse {
   doc_id: number;
   column: string;
-  bar: Record<string, unknown>;
-  pie: Record<string, unknown>;
-  line: Record<string, unknown>;
-  area: Record<string, unknown> | null;
-  histogram: Record<string, unknown> | null;
-  distribution: Record<string, unknown> | null;
-  correlation: Record<string, unknown> | null;
+  bar?: Record<string, unknown> | null;
+  pie?: Record<string, unknown> | null;
+  line?: Record<string, unknown> | null;
+  area?: Record<string, unknown> | null;
+  histogram?: Record<string, unknown> | null;
+  distribution?: Record<string, unknown> | null;
+  correlation?: Record<string, unknown> | null;
+  charts?: ChartItem[];
+  target_variable?: string | null;
 }
 
 export interface InsightsResponse {

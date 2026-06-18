@@ -6,7 +6,7 @@ from app.models.schemas import (
     ExecutiveSummaryResponse, KPIResponse, ChartInsightRequest, ChartInsightResponse,
 )
 from app.services.analytics_service import get_analytics
-from app.services.chart_service import generate_charts, generate_all_charts as _generate_all_charts
+from app.services.chart_service import generate_charts, generate_all_charts as _generate_all_charts, generate_smart_charts
 from app.services.insights_service import generate_insights as _generate_insights, generate_executive_summary
 from app.services.health_service import get_dataset_health
 from app.services.analytics_chat_service import chat_analytics as _chat_analytics
@@ -35,14 +35,14 @@ async def charts(payload: ChartsRequest):
 
 @router.post("/charts/all", response_model=ChartsResponse)
 async def charts_all(payload: AnalyticsRequest):
-    result = await _generate_all_charts(payload.doc_id)
-    if result is None:
-        raise HTTPException(status_code=404, detail="Document not found or not tabular")
-    column = result.pop("column", "")
+    # Uses new smart chart engine: top 5 features, one chart each
+    result = await generate_smart_charts(payload.doc_id)
     return ChartsResponse(
         doc_id=payload.doc_id,
-        column=column,
-        **result,
+        column=(result.get("charts") or [{}])[0].get("column", ""),
+        charts=result.get("charts", []),
+        correlation=result.get("correlation"),
+        target_variable=result.get("target_variable"),
     )
 
 
