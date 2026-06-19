@@ -98,7 +98,7 @@ def _generate_timeline_forecast(values: np.ndarray, periods: int) -> dict:
 
 def forecast_timeline(df: pd.DataFrame, target: str) -> dict:
     """Generate 30/90/180/365 day forecasts for the target column."""
-    vals = df[target].dropna().values.astype(float)
+    vals = pd.to_numeric(df[target], errors='coerce').dropna().values.astype(float)
     if len(vals) < 5:
         return {"error": "Insufficient data for timeline forecasting"}
 
