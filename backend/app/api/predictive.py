@@ -94,7 +94,7 @@ async def predictive_analysis(payload: AnalyticsRequest):
     if df is None or len(df.columns) < 2:
         raise HTTPException(status_code=400, detail="Dataset must be tabular with at least 2 columns")
 
-    from app.services.executive_predictive_service import generate_executive_prediction
-    result = await generate_executive_prediction(payload.doc_id)
+    from app.services.predictive_phase2_service import run_phase2_predictive
+    result = await run_phase2_predictive(payload.doc_id)
     result["doc_id"] = payload.doc_id
     return result
