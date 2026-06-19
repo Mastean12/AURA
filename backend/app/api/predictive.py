@@ -94,9 +94,7 @@ async def predictive_analysis(payload: AnalyticsRequest):
     if df is None or len(df.columns) < 2:
         raise HTTPException(status_code=400, detail="Dataset must be tabular with at least 2 columns")
 
-    from app.services.data_quality_service import run_data_quality_audit
-    dq = run_data_quality_audit(df)
-    result = await run_predictive_analysis(payload.doc_id, df, dq.get("overall_score", 80))
+    from app.services.executive_predictive_service import generate_executive_prediction
+    result = await generate_executive_prediction(payload.doc_id)
     result["doc_id"] = payload.doc_id
-    result["data_quality"] = {"score": dq.get("overall_score"), "grade": dq.get("grade")}
     return result
