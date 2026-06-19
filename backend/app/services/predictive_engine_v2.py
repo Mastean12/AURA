@@ -412,9 +412,20 @@ async def run_predictive_analysis(doc_id: int, df: pd.DataFrame, dq_score: float
 
     # Step 3: Feature engineering
     df_fe = engineer_features(df, target, problem)
-    df_model = pd.concat([df_fe, df[target]], axis=1)
-    # Drop non-numeric columns
-    df_model = df_model.select_dtypes(include=["number"]).dropna(how="all", axis=1)
+
+    # Encode target if categorical
+    y_raw = df[target].copy()
+    if not pd.api.types.is_numeric_dtype(y_raw):
+        from sklearn.preprocessing import LabelEncoder
+        le = LabelEncoder()
+        y_encoded = pd.Series(le.fit_transform(y_raw), name=target, index=y_raw.index)
+    else:
+        y_encoded = y_raw
+
+    df_model = pd.concat([df_fe, y_encoded], axis=1)
+    # Drop non-numeric feature columns only (keep target)
+    numeric_features = df_fe.select_dtypes(include=["number"]).columns
+    df_model = pd.concat([df_model[numeric_features], y_encoded], axis=1).dropna(how="all", axis=1)
     df_model = df_model.dropna(subset=[target])
 
     if len(df_model) < 10:
