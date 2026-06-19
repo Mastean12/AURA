@@ -117,7 +117,7 @@ export default function PredictivePage() {
                   {drivers.map((d: any, i: number) => (
                     <div key={i} className="flex items-center gap-2">
                       <span className="text-[10px] text-zinc-600 w-5">{i + 1}.</span>
-                      <span className="text-xs text-zinc-200 w-40 truncate">{d.feature.replace(/_/g, " ").title()}</span>
+                      <span className="text-xs text-zinc-200 w-40 truncate">{toTitle(d.feature)}</span>
                       <div className="flex-1 h-1.5 rounded-full bg-zinc-800 overflow-hidden">
                         <div className="h-full rounded-full bg-amber-500" style={{ width: `${Math.min(d.pct || d.importance * 100, 100)}%` }} />
                       </div>
@@ -364,6 +364,10 @@ export default function PredictivePage() {
       )}
     </div>
   );
+}
+
+function toTitle(s: string) {
+  return s.replace(/_/g, " ").replace(/\w\S*/g, w => w[0].toUpperCase() + w.slice(1).toLowerCase());
 }
 
 function ArrowRight(props: React.SVGProps<SVGSVGElement>) {
