@@ -139,4 +139,5 @@ async def generate_executive_briefing_pdf(doc_ids: list[int], org_name: str = ""
         pdf.body_bold(f"Industry: {industry.get('detected_industry', 'General Business')}")
         pdf.bullet(industry["industry_kpis"][:5])
 
-    return pdf.close()
+    pdf.close()
+    return pdf

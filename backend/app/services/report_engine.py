@@ -303,6 +303,8 @@ class ReportPDF(FPDF):
         self.set_text_color(*LIGHT)
         self.cell(0, 5, f"{self._sanitize(self._title)}  |  {self._type}", align="C", new_x="LMARGIN", new_y="NEXT")
         self.cell(0, 5, "Prepared by: AURA Executive Intelligence Platform  |  Confidential", align="C", new_x="LMARGIN", new_y="NEXT")
+
+    def to_bytes(self) -> bytes:
         return bytes(self.output())
 
     def filename(self) -> str:

@@ -197,4 +197,5 @@ async def generate_intelligence_report(doc_ids: list[int], org_name: str = "",
     pdf.body("Prepared by: AURA Executive Intelligence Platform")
     pdf.body("Confidence scores are AI-generated estimates. Review by domain experts recommended.")
 
-    return pdf.close()
+    pdf.close()
+    return pdf

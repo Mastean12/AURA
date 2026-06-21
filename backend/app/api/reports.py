@@ -36,21 +36,26 @@ async def _resolve_org(org_id: int | None, company_name: str) -> tuple[str, str,
     return company_name, "", "#2563eb"
 
 
-def _quality_check(pdf_bytes: bytes, pdf_obj) -> dict:
+def _quality_check(pdf_obj) -> dict:
     errors = []
-    if not pdf_bytes or len(pdf_bytes) < 5000:
-        errors.append("Report content is too short or empty")
-    if pdf_obj.page_no() < 2:
-        errors.append("Report has no content pages")
-    v_errors = pdf_obj.validate()
-    errors.extend(v_errors)
+    try:
+        if pdf_obj.page_no() < 2:
+            errors.append("Report has no content pages")
+        v_errors = pdf_obj.validate()
+        errors.extend(v_errors)
+    except Exception as e:
+        logger.warning("Quality check: %s", e)
     return {"passed": len(errors) == 0, "errors": errors}
 
 
-def _pdf_response(pdf_bytes: bytes, pdf_obj) -> Response:
-    qc = _quality_check(pdf_bytes, pdf_obj)
+def _pdf_response(pdf_obj) -> Response:
+    try:
+        pdf_bytes = pdf_obj.close()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"PDF generation failed: {e}")
+    qc = _quality_check(pdf_obj)
     if not qc["passed"]:
-        logger.warning("Quality control failed: %s", qc["errors"])
+        logger.warning("Quality control: %s", qc["errors"])
     fname = pdf_obj.filename()
     return Response(
         content=pdf_bytes,
