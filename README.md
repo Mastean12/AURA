@@ -93,15 +93,41 @@ aura/
 - **Analytics Chat** — Conversational Q&A over datasets with session history
 - **Business Health Score** — Dataset quality scoring across completeness, quality, consistency
 
-### Phase 2 — Predictive Intelligence
-- **Forecast Dashboard** — Automated trend forecasting with linear regression + seasonality detection
-  - 30-day, 90-day, 12-month projections with confidence bands
-  - Historical vs forecast visualization with direction/strength metrics
-- **Anomaly Detection** — Z-score + IQR + moving average triple detection
-  - Severity classification (low/medium/high) with AI-powered cause explanations
-- **Risk Scorecard** — Overall Business Risk Score (0-100) across Financial, Operational, Data Quality, Performance
-  - Score breakdown with progress bars and mitigation recommendations
-- **AI Recommendations Panel** — Categorized strategic recommendations with impact/urgency/confidence
+### Phase 2 — Executive Predictive Intelligence
+Full 7-module pipeline that transforms model outputs into executive decisions.
+
+- **Prediction Explanation Engine** — Translates model outputs into business language
+  - SHAP-style feature importance ranking with percentage contribution
+  - Confidence calculation from data quality, sample size, model performance, feature strength
+  - Natural-language executive summary explaining what was predicted, why, and business impact
+- **Forecast Timeline Engine** — Multi-model forecasting with automatic model selection
+  - 30-day, 90-day, 180-day, 365-day projections with confidence bands
+  - Four competing models: linear trend, quadratic trend, exponential smoothing, Random Forest (lag-based)
+  - Auto-selects best performer by RMSE on holdout validation
+  - Trend direction (up/down/stable), growth %, and confidence per horizon
+- **Segment-Level Prediction Engine** — Automatically identifies driving segments
+  - Numeric columns split at median into high/low risk groups
+  - Categorical columns scored per category (min 5 records per segment)
+  - Each segment includes risk score, population count, and estimated revenue impact
+- **What-If Simulation Engine** — Tests business strategies before implementation
+  - Five scenario types: retention program, price change, budget increase, contract changes, staffing changes
+  - Automatically selects the highest-correlated feature as lever
+  - Outputs before/after values, change %, and improvement direction
+- **Early Warning System** — Detects threats before they become critical
+  - Rapid-change monitoring: warning if recent 5-period mean deviates >10% from earlier baseline
+  - Anomaly spike detection: z-score > 3 flags unusual patterns
+  - Severity: critical (>30% change), high (>10%), medium (decreases or spikes)
+  - Each alert includes impact statement and recommended action
+- **Prescriptive Analytics** — Recommends actions ranked by priority
+  - Action recommendation with expected impact %, revenue preserved, ROI, and effort level
+  - Priority score (0–100) based on risk severity
+- **Industry Intelligence Layer** — Business-context-aware analysis
+  - Auto-detects industry from column names (Telecom, Retail, Banking, Insurance, Manufacturing, Healthcare, Logistics, SaaS)
+  - Industry-specific KPI library (5 KPIs per industry)
+  - Industry-specific recommendations (3 risk/recommendation/impact triplets per industry)
+  - Forecast enrichment with industry-context commentary
+- **Autonomous Pipeline** — End-to-end orchestration
+  - Data quality audit → problem detection → model selection → prediction → risk analysis → explanation → simulation → report
 
 ### Phase 3 — Enterprise Intelligence
 - **Industry Intelligence** — Auto-detect business domain (Finance/Sales/HR/Operations/NGO)
@@ -123,7 +149,7 @@ aura/
   - Grouped document library with individual & batch delete
 - **AI Reliability** — Retry with exponential backoff (3 attempts), fallback model, user-friendly error messages
   - Request ID tracing across all logs, AI health monitoring endpoint
-- **Industry Coverage** — Finance, Sales, HR, Operations, NGO & Development
+- **Industry Coverage** — Telecom, Retail, Banking, Insurance, Manufacturing, Healthcare, Logistics, SaaS, General Business
 
 ## Getting Started
 
@@ -216,6 +242,7 @@ docker compose up -d
 | POST | `/api/v1/predictive/anomalies` | Anomaly detection with severity scores |
 | POST | `/api/v1/predictive/risk-score` | Business risk scoring (0-100) |
 | POST | `/api/v1/predictive/recommendations` | AI strategic recommendations |
+| POST | `/api/v1/predictive/analysis` | Full executive predictive analysis (7-module pipeline) |
 
 ### Enterprise
 | Method | Path | Description |
