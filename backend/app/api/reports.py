@@ -17,10 +17,14 @@ router = APIRouter(prefix="/reports", tags=["reports"])
 
 
 class ReportRequest(BaseModel):
-    doc_ids: list[int]
+    doc_ids: list[int] = []
+    doc_id: int | None = None
     org_id: int | None = None
     company_name: str = ""
     workspace: str = ""
+
+    def resolved_doc_ids(self) -> list[int]:
+        return self.doc_ids if self.doc_ids else ([self.doc_id] if self.doc_id else [])
 
 
 async def _resolve_org(org_id: int | None, company_name: str) -> tuple[str, str, str]:
@@ -67,36 +71,54 @@ def _pdf_response(pdf_obj) -> Response:
 @router.post("/executive-briefing-pdf")
 async def executive_briefing_report(payload: ReportRequest):
     try:
+        doc_ids = payload.resolved_doc_ids()
+        if not doc_ids:
+            raise HTTPException(status_code=400, detail="doc_ids or doc_id required")
         org_name, org_logo, org_color = await _resolve_org(payload.org_id, payload.company_name)
         pdf_obj = await generate_executive_briefing_pdf(
-            payload.doc_ids, org_name, org_logo, org_color, payload.workspace,
+            doc_ids, org_name, org_logo, org_color, payload.workspace,
         )
-        return _pdf_response(pdf_obj, pdf_obj)
+        return _pdf_response(pdf_obj)
+    except HTTPException:
+        raise
     except Exception as e:
+        logger.exception("Executive briefing failed")
         raise HTTPException(status_code=500, detail=f"Executive briefing failed: {e}")
 
 
 @router.post("/board-report")
 async def board_report(payload: ReportRequest):
     try:
+        doc_ids = payload.resolved_doc_ids()
+        if not doc_ids:
+            raise HTTPException(status_code=400, detail="doc_ids or doc_id required")
         org_name, org_logo, org_color = await _resolve_org(payload.org_id, payload.company_name)
         pdf_obj = await generate_board_report(
-            payload.doc_ids, org_name, org_logo, org_color, payload.workspace,
+            doc_ids, org_name, org_logo, org_color, payload.workspace,
         )
-        return _pdf_response(pdf_obj, pdf_obj)
+        return _pdf_response(pdf_obj)
+    except HTTPException:
+        raise
     except Exception as e:
+        logger.exception("Board report failed")
         raise HTTPException(status_code=500, detail=f"Board report failed: {e}")
 
 
 @router.post("/intelligence-report")
 async def intelligence_report(payload: ReportRequest):
     try:
+        doc_ids = payload.resolved_doc_ids()
+        if not doc_ids:
+            raise HTTPException(status_code=400, detail="doc_ids or doc_id required")
         org_name, org_logo, org_color = await _resolve_org(payload.org_id, payload.company_name)
         pdf_obj = await generate_intelligence_report(
-            payload.doc_ids, org_name, org_logo, org_color, payload.workspace,
+            doc_ids, org_name, org_logo, org_color, payload.workspace,
         )
-        return _pdf_response(pdf_obj, pdf_obj)
+        return _pdf_response(pdf_obj)
+    except HTTPException:
+        raise
     except Exception as e:
+        logger.exception("Intelligence report failed")
         raise HTTPException(status_code=500, detail=f"Intelligence report failed: {e}")
 
 
