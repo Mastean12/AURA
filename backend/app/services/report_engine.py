@@ -163,7 +163,7 @@ class ReportPDF(FPDF):
         self.set_text_color(*MID)
         for item in items:
             self.cell(4)
-            self.cell(0, 5, f"\u2022 {self._sanitize(str(item))}", new_x="LMARGIN", new_y="NEXT")
+            self.cell(0, 5, f"- {self._sanitize(str(item))}", new_x="LMARGIN", new_y="NEXT")
         self.ln(1)
 
     def kv_row(self, key: str, value: str):

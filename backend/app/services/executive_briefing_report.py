@@ -94,9 +94,9 @@ async def generate_executive_briefing_pdf(doc_ids: list[int], org_name: str = ""
                 pdf.set_x(10)
                 pdf.set_font("Helvetica", "", 8)
                 pdf.set_text_color(220, 38, 38)
-                pdf.cell(4, 4, "\u2022")
+                    pdf.cell(4, 4, "-")
                 pdf.set_text_color(* (60, 60, 60))
-                pdf.multi_cell(col_w - 4, 4, str(name)[:80])
+                pdf.multi_cell(col_w - 4, 4, str(r_text)[:80])
 
         if opps:
             pdf.set_xy(pdf.w / 2 + 5, y_before)
@@ -106,7 +106,7 @@ async def generate_executive_briefing_pdf(doc_ids: list[int], org_name: str = ""
                 pdf.set_x(pdf.w / 2 + 5)
                 pdf.set_font("Helvetica", "", 8)
                 pdf.set_text_color(16, 185, 129)
-                pdf.cell(4, 4, "\u2022")
+                pdf.cell(4, 4, "-")
                 pdf.set_text_color(* (60, 60, 60))
                 pdf.multi_cell(col_w - 4, 4, str(title)[:80])
 
