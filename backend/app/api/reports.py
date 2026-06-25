@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from app.services.board_report_service import generate_board_report
 from app.services.executive_briefing_report import generate_executive_briefing_pdf
 from app.services.intelligence_report_generator import generate_intelligence_report
+from app.services.analytics_export_service import generate_analytics_export
 from app.database.database import get_session_factory
 from app.models.organization import Organization
 from sqlalchemy import select
@@ -135,4 +136,18 @@ async def intelligence_report(payload: ReportRequest):
 
 @router.post("/export")
 async def export_report(payload: ReportRequest):
-    return await board_report(payload)
+    doc_id = payload.doc_id or (payload.doc_ids[0] if payload.doc_ids else None)
+    if not doc_id:
+        raise HTTPException(status_code=400, detail="doc_id required")
+    try:
+        pdf_obj = await generate_analytics_export(doc_id)
+        return _pdf_response(pdf_obj)
+    except Exception as e:
+        logger.exception("Analytics export failed")
+        raise HTTPException(status_code=500, detail=f"Analytics export failed: {e}")
+
+
+# Legacy: /reports/analytics-export forwards to /export
+@router.post("/analytics-export")
+async def analytics_export_legacy(payload: ReportRequest):
+    return await export_report(payload)

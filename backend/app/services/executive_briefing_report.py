@@ -50,7 +50,6 @@ async def generate_executive_briefing_pdf(doc_ids: list[int], org_name: str = ""
 
     pdf = ReportPDF(doc_title, "Executive Briefing", org_name, org_logo_url, accent)
     pdf.alias_nb_pages()
-    pdf = build_executive_report(pdf, result, df, target, "Executive Briefing")
+    pdf = build_executive_report(pdf, result, df, target, "executive_briefing", doc_ids)
     pdf.close()
     return pdf
-

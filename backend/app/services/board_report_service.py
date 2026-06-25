@@ -52,7 +52,6 @@ async def generate_board_report(doc_ids: list[int], org_name: str = "",
 
     pdf = ReportPDF(doc_title, "Board Report", org_name, org_logo_url, accent)
     pdf.alias_nb_pages()
-    pdf = build_executive_report(pdf, result, df, target, "Board Report")
+    pdf = build_executive_report(pdf, result, df, target, "board_report", doc_ids)
     pdf.close()
     return pdf
-
