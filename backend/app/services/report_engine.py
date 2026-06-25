@@ -65,7 +65,30 @@ class ReportPDF(FPDF):
         self._report_id = f"EXEC-{ts}"
 
     def _sanitize(self, text: str) -> str:
-        return text.encode('latin-1', 'replace').decode('latin-1')
+        result = []
+        for ch in str(text):
+            if ord(ch) < 256:
+                result.append(ch)
+            else:
+                safe = ch.replace('\u2014', '--').replace('\u2013', '-').replace('\u2018', "'").replace('\u2019', "'").replace('\u201c', '"').replace('\u201d', '"').replace('\u2026', '...').replace('\u2022', '-').replace('\u20ac', 'EUR')
+                result.append(safe if len(safe) < 3 else safe)
+        return ''.join(result)
+
+    def cell(self, *args, **kwargs):
+        if len(args) >= 3:
+            args = list(args)
+            args[2] = self._sanitize(args[2])
+        elif "txt" in kwargs:
+            kwargs["txt"] = self._sanitize(kwargs["txt"])
+        return super().cell(*args, **kwargs)
+
+    def multi_cell(self, *args, **kwargs):
+        if len(args) >= 3:
+            args = list(args)
+            args[2] = self._sanitize(args[2])
+        elif "txt" in kwargs:
+            kwargs["txt"] = self._sanitize(kwargs["txt"])
+        return super().multi_cell(*args, **kwargs)
 
     def header(self):
         if self.page_no() > 1:
