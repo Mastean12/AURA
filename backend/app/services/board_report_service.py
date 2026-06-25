@@ -97,7 +97,7 @@ async def generate_board_report(doc_ids: list[int], org_name: str = "",
         pdf.set_x(left_x)
         pdf.set_font("Helvetica", "", 8)
         pdf.set_text_color(* (60, 60, 60))
-                pdf.cell(4, 4, "-")
+        pdf.cell(4, 4, "-")
         pdf.multi_cell(col_w - 4, 4, str(f_text)[:90])
 
     pdf.set_xy(right_x, y0)
