@@ -53,6 +53,7 @@ REPORT_TYPES = {
 def build_executive_report(
     pdf: ReportPDF, result: dict[str, Any], df,
     target: str, report_type: str = "board_report", doc_ids: list[int] | None = None,
+    workspace: str = "",
 ) -> ReportPDF:
     """Build a report with sections varying by report_type."""
 
@@ -84,8 +85,8 @@ def build_executive_report(
 
     # ── Cover Page ──
     pdf.cover_page(
-        subtitle=f"{industry_data.get('detected_industry', 'Executive')} Intelligence Analysis",
-        workspace=pdf._org_name or "",
+        subtitle=f"{cfg['label']} — {industry_data.get('detected_industry', 'Executive')} Analysis",
+        workspace=workspace,
         confidentiality="CONFIDENTIAL",
     )
 
