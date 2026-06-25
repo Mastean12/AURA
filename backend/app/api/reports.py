@@ -40,7 +40,7 @@ async def _resolve_org(org_id: int | None, company_name: str) -> tuple[str, str,
     return company_name, "", "#2563eb"
 
 
-def _quality_check(pdf_obj) -> dict:
+def _quality_check(pdf_obj, result: dict | None = None) -> dict:
     errors = []
     try:
         if pdf_obj.page_no() < 2:
@@ -49,6 +49,17 @@ def _quality_check(pdf_obj) -> dict:
         errors.extend(v_errors)
     except Exception as e:
         logger.warning("Quality check: %s", e)
+
+    if result:
+        if not result.get("executive_summary") and not result.get("prediction_explanation", {}).get("summary"):
+            errors.append("Executive summary is missing")
+        if not result.get("risks"):
+            errors.append("No risks identified")
+        if not result.get("opportunities"):
+            errors.append("No opportunities identified")
+        if not result.get("prescriptive_recommendations") and not result.get("technical", {}).get("feature_importance"):
+            errors.append("No recommendations or feature analysis generated")
+
     return {"passed": len(errors) == 0, "errors": errors}
 
 

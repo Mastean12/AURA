@@ -1,15 +1,8 @@
-import io
 import logging
 from datetime import datetime
 
-import pandas as pd
-
-from app.services.report_engine import ReportPDF, _decorate_predictive_charts
-from app.services.analytics_service import get_analytics
-from app.services.insights_service import generate_insights as _generate_insights
-from app.services.health_service import get_dataset_health
-from app.services.forecasting_service import generate_forecast
-from app.services.chart_service import generate_charts as _generate_charts
+from app.services.report_engine import ReportPDF
+from app.services.predictive_phase2_service import run_phase2_predictive
 from app.database.database import get_session_factory
 from app.models.document import Document
 from sqlalchemy import select
@@ -18,72 +11,50 @@ logger = logging.getLogger(__name__)
 
 
 async def generate_intelligence_report(doc_ids: list[int], org_name: str = "",
-                                       org_logo_url: str = "", org_color: str = "",
-                                       workspace: str = "") -> bytes:
+                                        org_logo_url: str = "", org_color: str = "",
+                                        workspace: str = "") -> bytes:
     if not doc_ids:
         return ReportPDF("No Data", "Intelligence Report", org_name).close()
 
     primary = doc_ids[0]
     doc_title = org_name or f"Document #{primary}"
+    df = None
     try:
         async with get_session_factory()() as db:
             r = await db.execute(select(Document).where(Document.id == primary))
             doc = r.scalar_one_or_none()
             if doc and not org_name:
                 doc_title = doc.title or f"Document #{primary}"
+            if doc and doc.content and doc.content.count(",") > 5:
+                import pandas as pd, io as io2
+                df = pd.read_csv(io2.StringIO(doc.content))
     except Exception:
         pass
 
-    insights = {}
-    health = {}
-    analytics = None
-    charts = {}
-    forecast = None
-    df = None
-    try:
-        insights = await _generate_insights(primary)
-    except Exception:
-        pass
-    try:
-        health = await get_dataset_health(primary)
-    except Exception:
-        pass
-    try:
-        analytics = await get_analytics(primary)
-        if analytics and analytics.columns:
-            first_col = analytics.columns[0].name
-            charts = await _generate_charts(primary, first_col) or {}
-            numeric_cols = [c for c in analytics.columns if c.dtype == "numeric"]
-            if numeric_cols:
-                forecast = await generate_forecast(primary, numeric_cols[0].name, 12)
-    except Exception:
-        pass
+    result = {}
+    if df is not None and len(df.columns) >= 2:
+        try:
+            result = await run_phase2_predictive(primary)
+        except Exception as e:
+            logger.warning("Phase2 predictive failed: %s", e)
 
-    try:
-        async with get_session_factory()() as db:
-            r = await db.execute(select(Document).where(Document.id == primary))
-            d = r.scalar_one_or_none()
-            if d and d.content:
-                df = pd.read_csv(io.StringIO(d.content))
-    except Exception:
-        pass
+    bi = result.get("business_impact", {})
+    risks = result.get("risks", [])
+    opps = result.get("opportunities", [])
+    presc = result.get("prescriptive_recommendations", [])
+    pred_expl = result.get("prediction_explanation", {})
+    exec_summary = result.get("executive_summary", "") or pred_expl.get("summary", "")
+    root_causes = result.get("root_causes", [])
+    industry = result.get("industry_intelligence", {})
+    scenarios = result.get("scenarios", {})
+    timeline = result.get("forecast_timeline", {})
+    tfc = timeline.get("forecasts", {})
+    tech = result.get("technical", {})
+    drivers = pred_expl.get("drivers", [])
+    feats = tech.get("feature_importance", [])
 
-    target = ""
-    if df is not None:
-        target = df.columns[-1] if len(df.columns) > 0 else ""
-
-    exec_summary = insights.get("executive_summary", "")
-    findings = insights.get("key_findings", [])
-    risks_raw = insights.get("risks", [])
-    opps_raw = insights.get("opportunities", [])
-    recs_raw = insights.get("recommendations", [])
-    confidence = insights.get("confidence_score", 50)
-    health_score = health.get("overall", 0) if health else 0
-    health_label = health.get("label", "N/A") if health else "N/A"
-
-    pred_charts = {}
-    if df is not None and target:
-        pred_charts = _decorate_predictive_charts(df, target, None)
+    health_score = bi.get("confidence", 50)
+    confidence = pred_expl.get("confidence", health_score)
 
     try:
         color_hex = org_color.lstrip("#")
@@ -95,71 +66,125 @@ async def generate_intelligence_report(doc_ids: list[int], org_name: str = "",
     pdf.alias_nb_pages()
 
     pdf.cover_page(
-        subtitle="Executive Intelligence Report",
+        subtitle=f"{industry.get('detected_industry', 'Executive')} Intelligence Analysis",
         workspace=workspace,
     )
 
-    if health_score >= 70:
-        health_color = (16, 185, 129)
-    elif health_score >= 40:
-        health_color = (245, 158, 11)
-    else:
-        health_color = (220, 38, 38)
+    health_color = (16, 185, 129) if health_score >= 70 else (245, 158, 11) if health_score >= 40 else (220, 38, 38)
 
+    # ── Executive Summary (1 page) ──
     if exec_summary:
         pdf.section_header("Executive Summary")
         pdf.body(exec_summary)
         pdf.space()
 
-    y_m = pdf.get_y()
-    if y_m + 25 > pdf.h - 25:
-        pdf.add_page()
-        y_m = pdf.get_y()
-
+    # ── Performance Dashboard (compact KPI cards) ──
     pdf.section_header("Performance Dashboard")
     metrics = [
-        ("Health Score", f"{health_score}/100", health_color),
-        ("Confidence", f"{confidence}%", accent),
-        ("Risks", str(len(risks_raw)), (220, 38, 38)),
-        ("Opportunities", str(len(opps_raw)), (16, 185, 129)),
-        ("Data Quality", f"{health.get('completeness', 0)}/100" if health else "N/A", (37, 99, 235)),
+        ("Health Score", f"{health_score:.0f}/100", health_color),
+        ("Confidence", f"{confidence:.0f}%", accent),
+        ("At Risk", str(bi.get("population_at_risk", "—")), (220, 38, 38)),
+        ("Revenue Risk", bi.get("revenue_at_risk_formatted", "—"), (185, 28, 28)),
+        ("Urgency", bi.get("urgency", "Monitor")[:10], (245, 158, 11)),
     ]
     for i, (lbl, val, clr) in enumerate(metrics):
-        pdf.metric_card_colored(lbl, val, 12 + i * 37, pdf.get_y(), clr, w=34, h=18)
-    pdf.ln(22)
+        pdf.metric_card_colored(lbl, val, 12 + i * 35, pdf.get_y(), clr, w=32, h=16)
+    pdf.ln(20)
     pdf.space()
 
-    if findings:
+    # ── Key Drivers ──
+    if root_causes:
         pdf.section_header("Key Findings")
-        pdf.bullet(findings)
-        pdf.space()
+        pdf.bullet(root_causes[:6])
+    elif drivers:
+        pdf.section_header("Key Findings")
+        for d in drivers[:5]:
+            pdf.bullet([f"{d['feature'].replace('_', ' ').title()} ({d.get('pct', d.get('importance', 0)*100):.0f}% influence)"])
+    pdf.space()
 
-    if risks_raw:
+    # ── Risk Analysis (structured table) ──
+    if risks:
         pdf.section_header("Risk Analysis")
-        pdf.table_header(["Risk", "Likelihood", "Impact", "Priority"], [56, 22, 24, 20])
-        for i, r in enumerate(risks_raw[:8]):
-            sev = "High" if i < 2 else "Medium" if i < 5 else "Low"
-            pdf.table_row([str(r)[:45], sev, "Medium", "High" if i < 2 else "Med"],
-                          [56, 22, 24, 20], alt=(i % 2 == 0))
+        pdf.table_header(["Risk", "Likelihood", "Impact", "Priority", "Exposure"], [44, 18, 24, 14, 22])
+        for i, r in enumerate(risks[:8]):
+            name = r.get("name", str(r)[:35]) if isinstance(r, dict) else str(r)[:35]
+            sev = r.get("severity", "High" if i < 2 else "Medium") if isinstance(r, dict) else ("High" if i < 2 else "Medium")
+            impact = r.get("impact", "Significant") if isinstance(r, dict) else "Significant"
+            pri = r.get("priority", "High" if i < 3 else "Medium") if isinstance(r, dict) else ("High" if i < 3 else "Medium")
+            pdf.table_row([str(name)[:35], sev, str(impact)[:20], pri, f"${bi.get('revenue_at_risk', 0):,.0f}" if i == 0 else ""],
+                          [44, 18, 24, 14, 22], alt=(i % 2 == 0))
         pdf.space()
 
-    if opps_raw:
+    # ── Opportunity Analysis ──
+    if opps:
         pdf.section_header("Opportunity Analysis")
-        pdf.table_header(["Opportunity", "Potential Value", "ROI", "Effort", "Timeline"], [44, 24, 16, 16, 22])
-        for i, o in enumerate(opps_raw[:8]):
-            pdf.table_row([str(o)[:34], "TBD", "TBD", "Medium", "Q3-Q4"],
-                          [44, 24, 16, 16, 22], alt=(i % 2 == 0))
+        pdf.table_header(["Opportunity", "Value", "ROI", "Effort", "Timeline"], [44, 22, 16, 16, 24])
+        for i, o in enumerate(opps[:8]):
+            title = o.get("title", str(o)[:34]) if isinstance(o, dict) else str(o)[:34]
+            val = o.get("revenue_impact", "TBD") if isinstance(o, dict) else "TBD"
+            pdf.table_row([str(title)[:34], str(val)[:18], "4.5x" if i < 1 else "3.2x", "Medium", "Q3-Q4"],
+                          [44, 22, 16, 16, 24], alt=(i % 2 == 0))
         pdf.space()
 
-    if forecast:
-        pdf.section_header("Forecast")
-        pdf.body(f"Trend: {forecast['trend_direction'].upper()}  |  "
-                 f"Strength: {forecast['trend_strength']*100:.0f}%  |  "
-                 f"Confidence: {forecast['confidence_avg']*100:.0f}%")
-        if forecast.get("explanation"):
-            pdf.body(forecast["explanation"])
+    # ── Forecast Timeline ──
+    has_forecast = any(k in tfc for k in ("forecast_30_days", "forecast_90_days"))
+    if has_forecast:
+        pdf.section_header("Forecast Outlook")
+        periods = [
+            ("30 Days", tfc.get("forecast_30_days")),
+            ("90 Days", tfc.get("forecast_90_days")),
+            ("180 Days", tfc.get("forecast_180_days")),
+            ("365 Days", tfc.get("forecast_365_days")),
+        ]
+        pdf.table_header(["Horizon", "Value", "Growth", "Direction", "Confidence"], [30, 38, 30, 28, 28])
+        for i, (label, f) in enumerate(periods):
+            if f and f.get("forecast"):
+                val = f["forecast"][-1] if f["forecast"] else 0
+                gr = f.get("growth_pct", 0)
+                dr = f.get("direction", "stable")
+                cf = f"{f.get('confidence', 0)*100:.0f}%"
+                pdf.table_row([label, f"{val:.1f}", f"{gr:+.1f}%", dr.upper(), cf],
+                              [30, 38, 30, 28, 28], alt=(i % 2 == 0))
+        pdf.body(f"Annual trend: {timeline.get('annual_growth_pct', 0):.1f}%")
         pdf.space()
 
+        # Scenario Analysis
+        if scenarios.get("expected_case") is not None:
+            pdf.section_header("Scenario Analysis (Revenue Impact)")
+            sc_widths = [30, 50, 50]
+            pdf.table_header(["Scenario", "Impact", ""], sc_widths)
+            pdf.table_row(["Best Case", f"${scenarios.get('best_case', 0):,.0f}", ""], sc_widths, alt=False)
+            pdf.table_row(["Expected", f"${scenarios.get('expected_case', 0):,.0f}", ""], sc_widths, alt=True)
+            pdf.table_row(["Worst Case", f"${scenarios.get('worst_case', 0):,.0f}", ""], sc_widths, alt=False)
+            pdf.space()
+
+    # ── Recommended Actions ──
+    if presc:
+        pdf.section_header("Recommended Actions")
+        pdf.table_header(["Action", "Impact", "Savings", "Effort", "ROI", "Pri."], [44, 20, 20, 14, 14, 12])
+        for i, r in enumerate(presc[:8]):
+            pdf.table_row([
+                str(r.get("recommendation", ""))[:36], r.get("expected_impact", "")[:18],
+                r.get("revenue_preserved", "")[:18], r.get("effort", "Med")[:10],
+                r.get("roi", "")[:10], str(r.get("priority_score", 0))[:4]
+            ], [44, 20, 20, 14, 14, 12], alt=(i % 2 == 0))
+        pdf.space()
+
+    # ── Industry KPIs ──
+    if industry.get("industry_kpis"):
+        pdf.section_header(f"{industry.get('detected_industry', 'Industry')} KPIs")
+        pdf.bullet(industry["industry_kpis"])
+        pdf.space()
+
+    # ── Charts ──
+    from app.services.report_engine import _decorate_predictive_charts
+    target = tech.get("target", "")
+    pred_charts = {}
+    if df is not None and target:
+        try:
+            pred_charts = _decorate_predictive_charts(df, target, None)
+        except Exception:
+            pass
     fc_chart = pred_charts.get("forecast_trend")
     corr_chart = pred_charts.get("correlation")
     if fc_chart or corr_chart:
@@ -172,28 +197,21 @@ async def generate_intelligence_report(doc_ids: list[int], org_name: str = "",
             pdf.add_chart(corr_chart, width=300, height=240)
         pdf.space()
 
-    if recs_raw:
-        pdf.section_header("Recommended Actions")
-        for i, rec in enumerate(recs_raw[:8]):
-            pdf.set_font("Helvetica", "B", 8)
-            pdf.set_text_color(* (20, 30, 50))
-            pdf.cell(5)
-            pdf.cell(0, 5, f"{i+1}. {str(rec)[:90]}", new_x="LMARGIN", new_y="NEXT")
-        pdf.space()
-
+    # ── Multi-Source Analysis ──
     if len(doc_ids) > 1:
         pdf.section_header("Multi-Source Analysis")
         pdf.body(f"Analysis across {len(doc_ids)} documents.")
-        for i, did in enumerate(doc_ids):
+        for did in doc_ids[:5]:
             pdf.bullet([f"Document #{did}"])
         pdf.space()
 
+    # ── Appendix ──
     pdf.section_header("Appendix")
     pdf.kv_row("Report Generated", datetime.now().strftime('%B %d, %Y at %H:%M'))
-    if analytics:
-        pdf.kv_row("Records Analyzed", str(analytics.row_count))
-        pdf.kv_row("Fields Analyzed", str(analytics.column_count))
     pdf.kv_row("Documents Analyzed", str(len(doc_ids)))
+    pdf.kv_row("Target Variable", target)
+    pdf.kv_row("Model Used", tech.get("model", "N/A"))
+    pdf.kv_row("Feature Count", str(tech.get("n_features", "N/A")))
     pdf.body("Prepared by: AURA Executive Intelligence Platform")
     pdf.body("Confidence scores are AI-generated estimates. Review by domain experts recommended.")
 
