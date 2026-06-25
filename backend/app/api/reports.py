@@ -54,7 +54,7 @@ def _quality_check(pdf_obj) -> dict:
 
 def _pdf_response(pdf_obj) -> Response:
     try:
-        pdf_bytes = pdf_obj.close()
+        pdf_bytes = pdf_obj.to_bytes()
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"PDF generation failed: {e}")
     qc = _quality_check(pdf_obj)
