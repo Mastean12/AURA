@@ -82,6 +82,13 @@ def build_executive_report(
     health_color = (16, 185, 129) if health_score >= 70 else (245, 158, 11) if health_score >= 40 else (220, 38, 38)
     accent = pdf._accent or (37, 99, 235)
 
+    # ── Cover Page ──
+    pdf.cover_page(
+        subtitle=f"{industry_data.get('detected_industry', 'Executive')} Intelligence Analysis",
+        workspace=pdf._org_name or "",
+        confidentiality="CONFIDENTIAL",
+    )
+
     # ── Board Briefing (only for board reports) ──
     if cfg["board_briefing"]:
         pdf.section_header("Board Briefing")
