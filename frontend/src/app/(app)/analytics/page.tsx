@@ -20,8 +20,7 @@ export default function AnalyticsPage() {
   const [fetched, setFetched] = useState(false);
   const [loading, setLoading] = useState(false);
   const [businessData, setBusinessData] = useState<Record<string, any> | null>(null);
-  const [pipelineRunning, setPipelineRunning] = useState(false);
-  const [pipelineData, setPipelineData] = useState<Record<string, any> | null>(null);
+  const [pipelineStages, setPipelineStages] = useState<any[]>([]);
   const token = typeof window !== "undefined" ? localStorage.getItem("aura_token") : "";
   const authH = { "Content-Type": "application/json", Authorization: `Bearer ${token}` } as Record<string, string>;
 
@@ -30,33 +29,39 @@ export default function AnalyticsPage() {
   async function runAnalysis() {
     if (!selectedDoc) return;
     setLoading(true);
+    setBusinessData(null);
+    setPipelineStages([]);
+    // Show stages as they progress
+    const stageIds = ["understanding", "business_context", "data_quality", "statistical", "kpis", "executive", "visualizations", "dashboard"];
+    for (const sid of stageIds) {
+      setPipelineStages(prev => [...prev, { id: sid, status: "running" }]);
+      await new Promise(r => setTimeout(r, 200));
+    }
     try {
       const a = await getAnalytics(selectedDoc);
       setAnalytics(a as any);
-      const token = localStorage.getItem("aura_token");
-      const res = await fetch(`${apiBase}/api/v1/analytics/business-analytics`, {
-        method: "POST", headers: authH, body: JSON.stringify({ doc_id: selectedDoc }),
-      });
-      if (res.ok) setBusinessData(await res.json());
-    } catch {} finally { setLoading(false); }
-  }
-
-  async function runPipeline() {
-    if (!selectedDoc) return;
-    setPipelineRunning(true);
-    setPipelineData(null);
-    try {
       const res = await fetch(`${apiBase}/api/v1/analytics/pipeline`, {
         method: "POST", headers: authH, body: JSON.stringify({ doc_id: selectedDoc }),
       });
-      if (res.ok) setPipelineData(await res.json());
-    } catch {} finally { setPipelineRunning(false); }
+      if (res.ok) {
+        const data = await res.json();
+        const dash = data?.results?.dashboard || {};
+        const exec = data?.results?.executive || {};
+        // Build businessData from pipeline results for existing sections
+        setBusinessData({
+          dataset_intelligence: data?.results?.understanding || {},
+          kpi_summary: dash?.kpis || {},
+          charts: dash?.charts || [],
+          trend_analysis: dash?.trend_analysis || {},
+          comparative_analysis: dash?.comparative_analysis || [],
+          correlations: dash?.correlations || [],
+          chart_recommendations: [],
+        });
+        // Update stage statuses from response
+        setPipelineStages((data.stages || stageIds.map(id => ({ id, status: "completed" }))));
+      }
+    } catch {} finally { setLoading(false); }
   }
-
-  const pipelineDash = pipelineData?.results?.dashboard || {};
-  const pipelineExec = pipelineData?.results?.executive || {};
-  const pipelineStages = pipelineData?.stages || [];
-  const pipelineBh = pipelineDash?.business_health || {};
 
   const kpiSummary = businessData?.kpi_summary || {};
   const chartRecs = businessData?.chart_recommendations || [];
@@ -91,7 +96,35 @@ export default function AnalyticsPage() {
               <Activity className="h-5 w-5" />Run Business Analysis
             </button>
           )}
-          {loading && <div className="space-y-4">{[1,2,3,4].map(i => <div key={i} className="h-24 animate-pulse rounded-xl bg-zinc-800/50" />)}</div>}
+          {loading && (
+            <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-6">
+              <h2 className="text-sm font-medium uppercase tracking-wider text-zinc-500 mb-4">Processing Pipeline</h2>
+              <div className="space-y-3">
+                {[
+                  { id: "understanding", label: "Understanding Dataset" },
+                  { id: "business_context", label: "Detecting Business Context" },
+                  { id: "data_quality", label: "Assessing Data Quality" },
+                  { id: "statistical", label: "Running Statistical Analysis" },
+                  { id: "kpis", label: "Identifying KPIs" },
+                  { id: "executive", label: "Generating Executive Insights" },
+                  { id: "visualizations", label: "Building Visualizations" },
+                  { id: "dashboard", label: "Preparing Executive Dashboard" },
+                ].map(s => {
+                  const stage = pipelineStages.find(p => p.id === s.id);
+                  const status = stage?.status || "pending";
+                  return (
+                    <div key={s.id} className="flex items-center gap-3">
+                      {status === "completed" ? <CheckCircle className="h-5 w-5 text-emerald-500 shrink-0" /> :
+                       status === "failed" ? <XCircle className="h-5 w-5 text-red-500 shrink-0" /> :
+                       status === "running" ? <Loader2 className="h-5 w-5 text-blue-400 animate-spin shrink-0" /> :
+                       <Clock className="h-5 w-5 text-zinc-700 shrink-0" />}
+                      <span className={`text-sm ${status === "completed" ? "text-zinc-200" : status === "failed" ? "text-red-400" : status === "running" ? "text-blue-300" : "text-zinc-600"}`}>{s.label}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {businessData && <>
             {/* Dataset Context */}
@@ -272,106 +305,6 @@ export default function AnalyticsPage() {
             )}
           </>}
 
-          {/* Pipeline Orchestrator — additional feature */}
-          <div className="border-t border-zinc-800 pt-6 mt-4">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="text-sm font-medium uppercase tracking-wider text-zinc-500">Analytics Pipeline</h2>
-              {!pipelineRunning && !pipelineData && (
-                <button onClick={runPipeline} className="flex items-center gap-1.5 rounded-lg bg-zinc-800 px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-700">
-                  <Activity className="h-3.5 w-3.5" />Run Full Pipeline
-                </button>
-              )}
-              {pipelineRunning && (
-                <span className="flex items-center gap-1.5 text-xs text-blue-400"><Loader2 className="h-3.5 w-3.5 animate-spin" />Processing...</span>
-              )}
-              {pipelineData && !pipelineRunning && (
-                <div className="flex items-center gap-2">
-                  <CheckCircle className="h-4 w-4 text-emerald-400" />
-                  <span className="text-xs text-zinc-500">{(pipelineData.total_duration_ms / 1000).toFixed(1)}s</span>
-                  <button onClick={runPipeline} className="text-xs text-blue-400 hover:underline">Re-run</button>
-                </div>
-              )}
-            </div>
-
-            {/* Processing timeline */}
-            {pipelineRunning && (
-              <div className="rounded-xl border border-zinc-800 bg-zinc-900/30 p-4 space-y-2">
-                {["understanding", "business_context", "data_quality", "statistical", "kpis", "executive", "visualizations", "dashboard"].map((sid, i) => {
-                  const found = pipelineStages.find((s: any) => s.id === sid);
-                  const status = found?.status || (pipelineRunning ? "running" : "pending");
-                  return (
-                    <div key={sid} className="flex items-center gap-2 text-xs">
-                      {status === "completed" ? <CheckCircle className="h-4 w-4 text-emerald-500 shrink-0" /> :
-                       status === "running" ? <Loader2 className="h-4 w-4 text-blue-400 animate-spin shrink-0" /> :
-                       status === "failed" ? <XCircle className="h-4 w-4 text-red-500 shrink-0" /> :
-                       <Clock className="h-4 w-4 text-zinc-700 shrink-0" />}
-                      <span className={status === "completed" ? "text-zinc-300" : status === "running" ? "text-blue-300" : "text-zinc-600"}>
-                        {sid === "understanding" ? "Understanding Dataset" :
-                         sid === "business_context" ? "Detecting Business Context" :
-                         sid === "data_quality" ? "Assessing Data Quality" :
-                         sid === "statistical" ? "Running Statistical Analysis" :
-                         sid === "kpis" ? "Identifying KPIs" :
-                         sid === "executive" ? "Generating Executive Insights" :
-                         sid === "visualizations" ? "Building Visualizations" :
-                         "Preparing Dashboard"}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-
-            {/* Pipeline Results */}
-            {pipelineData && !pipelineRunning && pipelineDash.executive_summary && (
-              <div className="space-y-4">
-                <div className="rounded-xl border border-blue-900/30 bg-blue-950/20 p-4">
-                  <h3 className="text-xs font-medium uppercase tracking-wider text-blue-400 mb-2">Executive Summary</h3>
-                  <p className="text-sm text-zinc-200">{pipelineDash.executive_summary}</p>
-                </div>
-                {pipelineBh.overall && (
-                  <div className="grid gap-3 sm:grid-cols-6">
-                    {[
-                      { label: "Overall", value: pipelineBh.overall },
-                      { label: "Revenue", value: pipelineBh.revenue_health },
-                      { label: "Growth", value: pipelineBh.growth_health },
-                      { label: "Risk", value: pipelineBh.risk_health },
-                      { label: "Operations", value: pipelineBh.operations_health },
-                      { label: "Customers", value: pipelineBh.customer_health },
-                    ].filter(m => m.value).map(m => (
-                      <div key={m.label} className="text-center rounded-lg bg-zinc-800/30 p-2">
-                        <p className="text-[10px] text-zinc-500">{m.label}</p>
-                        <p className={`text-lg font-bold ${m.value >= 70 ? "text-emerald-400" : m.value >= 40 ? "text-amber-400" : "text-red-400"}`}>{m.value}</p>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {pipelineExec.risks?.length > 0 && (
-                  <div className="rounded-xl border border-red-800/30 bg-red-950/20 p-4">
-                    <h3 className="text-xs font-medium uppercase tracking-wider text-red-400 mb-2">Risks</h3>
-                    <div className="space-y-1">
-                      {pipelineExec.risks.slice(0, 3).map((r: any, i: number) => (
-                        <div key={i} className="flex gap-2 text-xs text-zinc-300">
-                          <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-red-500" />{r.name}{r.financial_exposure ? ` — ${r.financial_exposure}` : ""}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                {pipelineExec.recommendations?.length > 0 && (
-                  <div className="rounded-xl border border-purple-800/30 bg-purple-950/20 p-4">
-                    <h3 className="text-xs font-medium uppercase tracking-wider text-purple-400 mb-2">Recommendations</h3>
-                    <div className="space-y-1">
-                      {pipelineExec.recommendations.slice(0, 3).map((r: any, i: number) => (
-                        <div key={i} className="flex gap-2 text-xs text-zinc-300">
-                          <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-purple-500" />{r.title}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
         </div>
       )}
     </div>
