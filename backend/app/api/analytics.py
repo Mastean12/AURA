@@ -7,11 +7,13 @@ from app.models.schemas import (
 )
 from app.services.analytics_service import get_analytics
 from app.services.chart_service import generate_charts, generate_all_charts as _generate_all_charts, generate_smart_charts
+from app.services.statistical_quality_service import run_full_quality_analysis as _run_full_quality_analysis
 from app.services.insights_service import generate_insights as _generate_insights, generate_executive_summary
 from app.services.health_service import get_dataset_health
 from app.services.analytics_chat_service import chat_analytics as _chat_analytics
 from app.services.kpi_detection_service import discover_kpis
 from app.services.chart_insight_service import generate_chart_insight
+from app.services.statistical_quality_service import run_full_quality_analysis, compute_statistical_confidence
 
 router = APIRouter(prefix="/analytics", tags=["analytics"])
 
@@ -111,3 +113,54 @@ async def chart_insight(payload: ChartInsightRequest):
         column=payload.column,
         insight=insight,
     )
+
+
+@router.post("/quality-analysis")
+async def quality_analysis(payload: AnalyticsRequest):
+    """Run full data quality + statistical analysis pipeline."""
+    import io
+    import logging
+    import pandas as pd
+    logger = logging.getLogger(__name__)
+    try:
+        from app.database.database import get_session_factory
+        from app.models.document import Document
+        from sqlalchemy import select
+        async with get_session_factory()() as db:
+            r = await db.execute(select(Document).where(Document.id == payload.doc_id))
+            doc = r.scalar_one_or_none()
+    except Exception:
+        doc = None
+    if not doc or not doc.content:
+        raise HTTPException(status_code=404, detail="Document not found")
+    df = pd.read_csv(io.StringIO(doc.content)) if doc.content.count(",") > 5 else None
+    if df is None or len(df.columns) < 2:
+        raise HTTPException(status_code=400, detail="Dataset must be tabular")
+
+    import json
+    from app.services.statistical_quality_service import run_full_quality_analysis
+    result = await run_full_quality_analysis(payload.doc_id, df)
+
+    # Persist
+    try:
+        from app.models.quality_report import QualityReport
+        from app.database.database import get_session_factory
+        async with get_session_factory()() as db:
+            existing = await db.execute(select(QualityReport).where(QualityReport.doc_id == payload.doc_id))
+            qr = existing.scalar_one_or_none()
+            if not qr:
+                qr = QualityReport(doc_id=payload.doc_id)
+                db.add(qr)
+            dq = result.get("data_quality", {})
+            qr.data_quality_score = dq.get("overall_score")
+            qr.data_quality_grade = dq.get("grade")
+            qr.statistical_confidence = result.get("statistical_confidence", {}).get("score")
+            qr.issues_count = dq.get("issues_count", 0)
+            qr.issues_json = json.dumps(dq.get("issues", []))
+            qr.suggestions_json = json.dumps(result.get("feature_engineering_suggestions", []))
+            await db.commit()
+    except Exception as e:
+        logger.warning("Quality report persistence failed: %s", e)
+
+    result["doc_id"] = payload.doc_id
+    return result

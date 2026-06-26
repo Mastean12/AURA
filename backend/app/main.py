@@ -30,6 +30,7 @@ from app.models.user import User  # noqa: F401
 from app.models.organization import Organization, OrganizationSecurity, OrganizationAIConfig, OrganizationDataGovernance  # noqa: F401
 from app.models.billing import BillingAccount, Invoice  # noqa: F401
 from app.models.dataset_meta import DatasetMetadata  # noqa: F401
+from app.models.quality_report import QualityReport  # noqa: F401
 from app.models.workspace import Workspace, WorkspaceMember  # noqa: F401
 from app.models.audit_log import AuditLog  # noqa: F401
 

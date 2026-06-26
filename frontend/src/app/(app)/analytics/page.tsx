@@ -47,6 +47,9 @@ export default function AnalyticsPage() {
   const [dataIntel, setDataIntel] = useState<Record<string, any> | null>(null);
   const [editingIntel, setEditingIntel] = useState(false);
   const [editIntel, setEditIntel] = useState<Record<string, any>>({});
+  const [qualityReport, setQualityReport] = useState<Record<string, any> | null>(null);
+  const [qualityLoading, setQualityLoading] = useState(false);
+  const [showAdvancedStats, setShowAdvancedStats] = useState(false);
 
   const [exporting, setExporting] = useState(false);
 
@@ -128,6 +131,19 @@ export default function AnalyticsPage() {
     if (!selectedDoc) return;
     setInsightsLoading(true);
     try { setInsights(await getInsights(selectedDoc)); } finally { setInsightsLoading(false); }
+  }
+
+  async function runQualityAnalysis() {
+    if (!selectedDoc) return;
+    setQualityLoading(true);
+    try {
+      const token = localStorage.getItem("aura_token");
+      const res = await fetch(`${apiBase}/api/v1/analytics/quality-analysis`, {
+        method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ doc_id: selectedDoc }),
+      });
+      if (res.ok) setQualityReport(await res.json());
+    } catch {} finally { setQualityLoading(false); }
   }
 
   async function analyzeExecutiveSummary() {
@@ -342,6 +358,110 @@ export default function AnalyticsPage() {
                 ))}
               </div>
             </div>
+          )}
+
+          {/* Data Quality & Statistical Analysis */}
+          {qualityLoading ? (
+            <div className="h-24 animate-pulse rounded-xl bg-zinc-800/50" />
+          ) : qualityReport ? (
+            <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-5">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="h-5 w-5 text-amber-400" />
+                  <h2 className="text-sm font-medium uppercase tracking-wider text-zinc-500">Data Quality & Reliability</h2>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="text-xs text-zinc-500">Quality:</span>
+                  <span className={`text-lg font-bold ${(qualityReport as any)?.data_quality?.overall_score >= 80 ? "text-emerald-400" : (qualityReport as any)?.data_quality?.overall_score >= 60 ? "text-amber-400" : "text-red-400"}`}>
+                    {(qualityReport as any)?.data_quality?.overall_score || "—"}
+                    <span className="text-xs text-zinc-600">/100</span>
+                  </span>
+                  <span className="text-[10px] text-zinc-500">{(qualityReport as any)?.data_quality?.grade}</span>
+                  <span className="text-xs text-zinc-500 ml-2">Statistical:</span>
+                  <span className={`text-sm font-semibold ${(qualityReport as any)?.statistical_confidence?.score >= 80 ? "text-emerald-400" : (qualityReport as any)?.statistical_confidence?.score >= 60 ? "text-amber-400" : "text-red-400"}`}>
+                    {(qualityReport as any)?.statistical_confidence?.score || "—"}%
+                  </span>
+                </div>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <p className="text-[10px] uppercase tracking-wider text-zinc-600 mb-1">Key Issues</p>
+                  <ul className="space-y-0.5">
+                    {((qualityReport as any)?.data_quality?.issues || []).slice(0, 4).map((issue: any, i: number) => (
+                      <li key={i} className="flex gap-1.5 text-[11px] text-zinc-400">
+                        <span className={`mt-1 h-1.5 w-1.5 shrink-0 rounded-full ${issue.type === "missing" ? "bg-amber-500" : issue.type === "duplicates" ? "bg-red-500" : "bg-blue-500"}`} />
+                        {issue.column ? `${issue.column}: ` : ""}{issue.type.replace(/_/g, " ")} ({issue.count || issue.pct}{issue.count ? " records" : "%"})
+                      </li>
+                    ))}
+                    {((qualityReport as any)?.data_quality?.issues || []).length === 0 && <li className="text-xs text-zinc-600">No significant issues detected.</li>}
+                  </ul>
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase tracking-wider text-zinc-600 mb-1">Suggested Fixes</p>
+                  <ul className="space-y-0.5">
+                    {((qualityReport as any)?.feature_engineering_suggestions || []).slice(0, 3).map((s: any, i: number) => (
+                      <li key={i} className="flex gap-1.5 text-[11px] text-zinc-400">
+                        <span className={`mt-1 h-1.5 w-1.5 shrink-0 rounded-full ${s.priority === "high" ? "bg-red-500" : s.priority === "medium" ? "bg-amber-500" : "bg-blue-500"}`} />
+                        {s.suggestion}
+                      </li>
+                    ))}
+                    {((qualityReport as any)?.feature_engineering_suggestions || []).length === 0 && <li className="text-xs text-zinc-600">None suggested.</li>}
+                  </ul>
+                </div>
+              </div>
+              <button onClick={() => setShowAdvancedStats(!showAdvancedStats)}
+                className="mt-3 flex items-center gap-1 text-[10px] text-zinc-500 hover:text-zinc-300">
+                {showAdvancedStats ? "▼" : "▶"} Advanced Statistical Analysis
+              </button>
+              {showAdvancedStats && (
+                <div className="mt-3 space-y-3 border-t border-zinc-800 pt-3">
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <div className="rounded-lg bg-zinc-800/30 p-3">
+                      <p className="text-[10px] text-zinc-500">Normality Test</p>
+                      <p className="text-xs text-zinc-300 mt-1">
+                        {Object.values((qualityReport as any)?.normality || {}).filter((v: any) => v?.is_normal === true).length} normal / {Object.keys((qualityReport as any)?.normality || {}).length} columns
+                      </p>
+                    </div>
+                    <div className="rounded-lg bg-zinc-800/30 p-3">
+                      <p className="text-[10px] text-zinc-500">ANOVA Tests</p>
+                      <p className="text-xs text-zinc-300 mt-1">{((qualityReport as any)?.anova || []).length} tests run</p>
+                    </div>
+                    <div className="rounded-lg bg-zinc-800/30 p-3">
+                      <p className="text-[10px] text-zinc-500">PCA Components</p>
+                      <p className="text-xs text-zinc-300 mt-1">{(qualityReport as any)?.pca?.total_components || "N/A"} components</p>
+                    </div>
+                  </div>
+                  {((qualityReport as any)?.anova || []).length > 0 && (
+                    <div>
+                      <p className="text-[10px] font-medium text-zinc-500 mb-1">Significant ANOVA Results</p>
+                      <ul className="space-y-0.5">
+                        {((qualityReport as any)?.anova || []).filter((a: any) => a.significant).slice(0, 3).map((a: any, i: number) => (
+                          <li key={i} className="text-[11px] text-zinc-400">• {a.interpretation} (F={a.statistic}, p={a.p_value})</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {((qualityReport as any)?.pca?.explained_variance_ratio || []).length > 0 && (
+                    <div>
+                      <p className="text-[10px] font-medium text-zinc-500 mb-1">PCA Variance Explained</p>
+                      <div className="flex gap-2">
+                        {((qualityReport as any)?.pca?.explained_variance_ratio || []).map((v: number, i: number) => (
+                          <div key={i} className="flex-1 bg-zinc-800 rounded-full h-2 overflow-hidden">
+                            <div className="h-full rounded-full bg-blue-500" style={{ width: `${v * 100}%` }} />
+                          </div>
+                        ))}
+                      </div>
+                      <p className="text-[10px] text-zinc-600 mt-1">{(qualityReport as any)?.pca?.components_for_80pct} component(s) explain 80% variance</p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          ) : (
+            <button onClick={runQualityAnalysis} className="flex items-center gap-2 rounded-xl border border-zinc-800 bg-zinc-900/50 px-5 py-4 text-sm text-zinc-400 hover:bg-zinc-800/70 w-full">
+              <AlertTriangle className="h-5 w-5" />
+              Run Data Quality & Statistical Analysis
+            </button>
           )}
 
           {/* SECTION 4: AURA Intelligence — manual trigger */}
