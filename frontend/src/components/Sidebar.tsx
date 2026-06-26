@@ -21,7 +21,6 @@ const navGroups = [
       { href: "/upload", label: "Document Upload", icon: Upload },
       { href: "/chat", label: "Knowledge Base", icon: MessageSquare },
       { href: "/analytics", label: "Analytics", icon: BarChart3 },
-      { href: "/analytics/pipeline", label: "Pipeline", icon: Activity },
       { href: "/predictive", label: "Predictive", icon: TrendingUp },
     ],
   },
