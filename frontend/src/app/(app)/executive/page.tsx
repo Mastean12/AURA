@@ -43,6 +43,10 @@ export default function ExecutivePage() {
   const trend = data?.trend_analysis || {};
   const dq = data?.data_quality || {};
   const confidence = data?.confidence || 0;
+  const growthRates = data?.growth_rates || [];
+  const regional = data?.regional_breakdown || [];
+  const departmentData = data?.department_breakdown || [];
+  const marginAnalysis = data?.margin_analysis;
 
   return (
     <div className="mx-auto max-w-7xl space-y-6 p-6">
@@ -134,6 +138,46 @@ export default function ExecutivePage() {
                     <p className="text-xs text-zinc-300">{m.value}</p>
                   </div>
                 ))}
+              </div>
+            )}
+
+            {/* Growth Rates + Regional + Department Breakdown */}
+            {(growthRates.length > 0 || regional.length > 0 || departmentData.length > 0) && (
+              <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-5">
+                <h2 className="text-xs font-medium uppercase tracking-wider text-zinc-500 mb-3">Growth & Performance Breakdown</h2>
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {growthRates.map((g: any, i: number) => (
+                    <div key={i} className="rounded-lg bg-zinc-800/30 p-3">
+                      <p className="text-[10px] text-zinc-500">{g.metric}</p>
+                      <p className={`text-lg font-bold mt-0.5 ${g.change_pct >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+                        {g.change_pct >= 0 ? "+" : ""}{g.change_pct}%
+                      </p>
+                      <p className="text-[10px] text-zinc-500">{g.directional_word} from {g.earlier_avg} to {g.recent_avg}</p>
+                    </div>
+                  ))}
+                  {regional.map((r: any, i: number) => (
+                    <div key={`reg-${i}`} className="rounded-lg bg-blue-950/30 border border-blue-800/30 p-3">
+                      <p className="text-[10px] text-blue-400">{r.segment}</p>
+                      <p className="text-sm font-bold text-zinc-200 mt-0.5">{r.contribution_pct}%</p>
+                      <p className="text-[10px] text-zinc-500">of {r.kpi}</p>
+                    </div>
+                  ))}
+                  {departmentData.map((d: any, i: number) => (
+                    <div key={`dept-${i}`} className="rounded-lg bg-amber-950/30 border border-amber-800/30 p-3">
+                      <p className="text-[10px] text-amber-400">{d.kpi} by Department</p>
+                      <p className="text-xs text-zinc-300 mt-1">Best: <span className="text-emerald-400 font-medium">{d.best_department}</span> ({d.best_value})</p>
+                      <p className="text-xs text-zinc-300">Worst: <span className="text-red-400 font-medium">{d.worst_department}</span> ({d.worst_value})</p>
+                      <p className="text-[10px] text-zinc-500 mt-0.5">{d.gap_pct}% gap</p>
+                    </div>
+                  ))}
+                </div>
+                {marginAnalysis && (
+                  <div className="mt-3 rounded-lg bg-red-950/30 border border-red-800/30 p-3">
+                    <p className="text-xs font-medium text-red-400">⚠ Margin Alert</p>
+                    <p className="text-xs text-zinc-300 mt-1">{marginAnalysis.insight}</p>
+                    <p className="text-[10px] text-zinc-500 mt-1">Recommendation: {marginAnalysis.recommendation}</p>
+                  </div>
+                )}
               </div>
             )}
 
