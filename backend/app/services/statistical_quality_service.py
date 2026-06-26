@@ -25,8 +25,8 @@ def compute_normality(col_data: pd.Series) -> dict:
     skew = _safe_stat(col_data, lambda x: x.skew())
     kurt = _safe_stat(col_data, lambda x: x.kurtosis())
     # If skewness is between -2 and 2 and kurtosis between -7 and 7, roughly normal
-    is_normal = abs(skew) < 2 and abs(kurt) < 7
-    return {"is_normal": is_normal, "skewness": round(skew, 3), "kurtosis": round(kurt, 3),
+    is_normal = bool(abs(skew) < 2 and abs(kurt) < 7)
+    return {"is_normal": is_normal, "skewness": round(float(skew), 3), "kurtosis": round(float(kurt), 3),
             "reason": "Approximately normal" if is_normal else "Non-normal distribution detected"}
 
 
@@ -37,12 +37,12 @@ def compute_confidence_interval(col_data: pd.Series, confidence: float = 0.95) -
         return {"lower": None, "upper": None, "mean": None, "margin": None}
     from scipy.stats import t
     mean = float(col_data.mean())
-    se = float(col_data.std() / np.sqrt(n))
-    alpha = 1 - confidence
-    t_crit = float(t.ppf(1 - alpha / 2, n - 1))
-    margin = t_crit * se
+    se = float(col_data.std() / float(np.sqrt(n)))
+    alpha = 1.0 - confidence
+    t_crit = float(t.ppf(1.0 - alpha / 2.0, n - 1))
+    margin = float(t_crit * se)
     return {"lower": round(mean - margin, 4), "upper": round(mean + margin, 4),
-            "mean": round(mean, 4), "margin": round(margin, 4), "confidence": confidence}
+            "mean": round(mean, 4), "margin": round(margin, 4), "confidence": float(confidence)}
 
 
 def compute_anova(df: pd.DataFrame, numeric_col: str, cat_col: str) -> dict:
@@ -53,9 +53,10 @@ def compute_anova(df: pd.DataFrame, numeric_col: str, cat_col: str) -> dict:
         return {"test": "ANOVA", "statistic": None, "p_value": None, "reason": "Need 2+ groups with 5+ samples"}
     try:
         f_stat, p_val = f_oneway(*groups)
+        sig = bool(p_val < 0.05)
         return {"test": "ANOVA", "statistic": round(float(f_stat), 4), "p_value": round(float(p_val), 6),
-                "significant": p_val < 0.05, "groups": len(groups),
-                "interpretation": f"Numeric column '{numeric_col}' differs significantly across '{cat_col}' categories" if p_val < 0.05 else f"No significant difference in '{numeric_col}' across '{cat_col}'"}
+                "significant": sig, "groups": len(groups),
+                "interpretation": f"Numeric column '{numeric_col}' differs significantly across '{cat_col}' categories" if sig else f"No significant difference in '{numeric_col}' across '{cat_col}'"}
     except Exception as e:
         return {"test": "ANOVA", "error": str(e)}
 
@@ -68,9 +69,10 @@ def compute_chi_square(df: pd.DataFrame, col_a: str, col_b: str) -> dict:
         return {"test": "Chi-Square", "statistic": None, "p_value": None, "reason": "Empty contingency table"}
     try:
         chi2, p_val, dof, expected = chi2_contingency(ct)
+        sig = bool(p_val < 0.05)
         return {"test": "Chi-Square", "statistic": round(float(chi2), 4), "p_value": round(float(p_val), 6),
-                "dof": int(dof), "significant": p_val < 0.05,
-                "interpretation": f"'{col_a}' and '{col_b}' are significantly related" if p_val < 0.05 else f"No significant relationship between '{col_a}' and '{col_b}'"}
+                "dof": int(dof), "significant": sig,
+                "interpretation": f"'{col_a}' and '{col_b}' are significantly related" if sig else f"No significant relationship between '{col_a}' and '{col_b}'"}
     except Exception as e:
         return {"test": "Chi-Square", "error": str(e)}
 
@@ -173,7 +175,7 @@ def compute_statistical_confidence(dq_score: float, n_rows: int, n_cols: int, no
     score = round((data_quality_weight + sample_size_weight + feature_count_weight + normality_weight + completeness_weight) * 100, 1)
     score = max(0, min(100, score))
     grade = "Excellent" if score >= 80 else "Good" if score >= 60 else "Moderate" if score >= 40 else "Poor"
-    return {"score": score, "grade": grade, "sample_size_adequate": n_rows >= 100, "feature_count_adequate": n_cols >= 3}
+    return {"score": score, "grade": grade, "sample_size_adequate": bool(n_rows >= 100), "feature_count_adequate": bool(n_cols >= 3)}
 
 
 async def run_full_quality_analysis(doc_id: int, df: pd.DataFrame) -> dict[str, Any]:

@@ -163,4 +163,20 @@ async def quality_analysis(payload: AnalyticsRequest):
         logger.warning("Quality report persistence failed: %s", e)
 
     result["doc_id"] = payload.doc_id
-    return result
+    # Convert numpy types to native Python for JSON serialization
+    import numpy as np
+    def _convert(obj):
+        if isinstance(obj, dict):
+            return {k: _convert(v) for k, v in obj.items()}
+        elif isinstance(obj, list):
+            return [_convert(v) for v in obj]
+        elif isinstance(obj, np.integer):
+            return int(obj)
+        elif isinstance(obj, np.floating):
+            return float(obj)
+        elif isinstance(obj, np.bool_):
+            return bool(obj)
+        elif isinstance(obj, np.ndarray):
+            return obj.tolist()
+        return obj
+    return _convert(result)
