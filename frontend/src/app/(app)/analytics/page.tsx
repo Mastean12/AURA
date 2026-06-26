@@ -6,7 +6,7 @@ import {
   FileText, Send, Loader2, AlertTriangle,
   Lightbulb, Flag, Bot, User, DollarSign, Users,
   Clock, ArrowUpRight, ArrowDownRight, Database, Edit2, Check, X,
-  Target, LineChart, PieChart, Activity, CheckCircle, XCircle,
+  Target, LineChart, PieChart, Activity, CheckCircle,
 } from "lucide-react";
 import { listDocuments, getAnalytics } from "@/lib/api";
 import type { DocumentResponse } from "@/types";
@@ -29,37 +29,24 @@ export default function AnalyticsPage() {
   async function runAnalysis() {
     if (!selectedDoc) return;
     setLoading(true);
-    setBusinessData(null);
     setPipelineStages([]);
-    // Show stages as they progress
-    const stageIds = ["understanding", "business_context", "data_quality", "statistical", "kpis", "executive", "visualizations", "dashboard"];
-    for (const sid of stageIds) {
-      setPipelineStages(prev => [...prev, { id: sid, status: "running" }]);
-      await new Promise(r => setTimeout(r, 200));
+    const STAGE_LABELS = [
+      "Understanding Dataset", "Detecting Business Context", "Assessing Data Quality",
+      "Running Statistical Analysis", "Identifying KPIs", "Generating Executive Insights",
+      "Building Visualizations", "Preparing Executive Dashboard",
+    ];
+    for (const label of STAGE_LABELS) {
+      setPipelineStages(prev => [...prev, { label, status: "running" }]);
+      await new Promise(r => setTimeout(r, 150));
     }
     try {
       const a = await getAnalytics(selectedDoc);
       setAnalytics(a as any);
-      const res = await fetch(`${apiBase}/api/v1/analytics/pipeline`, {
+      const res = await fetch(`${apiBase}/api/v1/analytics/business-analytics`, {
         method: "POST", headers: authH, body: JSON.stringify({ doc_id: selectedDoc }),
       });
-      if (res.ok) {
-        const data = await res.json();
-        const dash = data?.results?.dashboard || {};
-        const exec = data?.results?.executive || {};
-        // Build businessData from pipeline results for existing sections
-        setBusinessData({
-          dataset_intelligence: data?.results?.understanding || {},
-          kpi_summary: dash?.kpis || {},
-          charts: dash?.charts || [],
-          trend_analysis: dash?.trend_analysis || {},
-          comparative_analysis: dash?.comparative_analysis || [],
-          correlations: dash?.correlations || [],
-          chart_recommendations: [],
-        });
-        // Update stage statuses from response
-        setPipelineStages((data.stages || stageIds.map(id => ({ id, status: "completed" }))));
-      }
+      if (res.ok) setBusinessData(await res.json());
+      setPipelineStages(prev => prev.map(s => ({ ...s, status: "completed" })));
     } catch {} finally { setLoading(false); }
   }
 
@@ -100,28 +87,13 @@ export default function AnalyticsPage() {
             <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-6">
               <h2 className="text-sm font-medium uppercase tracking-wider text-zinc-500 mb-4">Processing Pipeline</h2>
               <div className="space-y-3">
-                {[
-                  { id: "understanding", label: "Understanding Dataset" },
-                  { id: "business_context", label: "Detecting Business Context" },
-                  { id: "data_quality", label: "Assessing Data Quality" },
-                  { id: "statistical", label: "Running Statistical Analysis" },
-                  { id: "kpis", label: "Identifying KPIs" },
-                  { id: "executive", label: "Generating Executive Insights" },
-                  { id: "visualizations", label: "Building Visualizations" },
-                  { id: "dashboard", label: "Preparing Executive Dashboard" },
-                ].map(s => {
-                  const stage = pipelineStages.find(p => p.id === s.id);
-                  const status = stage?.status || "pending";
-                  return (
-                    <div key={s.id} className="flex items-center gap-3">
-                      {status === "completed" ? <CheckCircle className="h-5 w-5 text-emerald-500 shrink-0" /> :
-                       status === "failed" ? <XCircle className="h-5 w-5 text-red-500 shrink-0" /> :
-                       status === "running" ? <Loader2 className="h-5 w-5 text-blue-400 animate-spin shrink-0" /> :
-                       <Clock className="h-5 w-5 text-zinc-700 shrink-0" />}
-                      <span className={`text-sm ${status === "completed" ? "text-zinc-200" : status === "failed" ? "text-red-400" : status === "running" ? "text-blue-300" : "text-zinc-600"}`}>{s.label}</span>
-                    </div>
-                  );
-                })}
+                {pipelineStages.map((s, i) => (
+                  <div key={i} className="flex items-center gap-3">
+                    {s.status === "completed" ? <CheckCircle className="h-5 w-5 text-emerald-500 shrink-0" /> :
+                     <Loader2 className="h-5 w-5 text-blue-400 animate-spin shrink-0" />}
+                    <span className={`text-sm ${s.status === "completed" ? "text-zinc-200" : "text-blue-300"}`}>{s.label}</span>
+                  </div>
+                ))}
               </div>
             </div>
           )}
@@ -168,23 +140,26 @@ export default function AnalyticsPage() {
               </div>
             )}
 
-             {/* Key Visualizations + Trend Analysis */}
+            {/* Chart Recommendations + Trend Analysis */}
             <div className="grid gap-6 lg:grid-cols-2">
-              {/* Rendered Charts */}
+              {/* Recommended Charts */}
               <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-5">
-                <h2 className="text-xs font-medium uppercase tracking-wider text-zinc-500 mb-3">Key Visualizations</h2>
-                {charts.length > 0 ? (
-                  <div className="space-y-3">
-                    {charts.slice(0, 4).map((ch: any, i: number) => (
-                      <div key={i} className="rounded-lg bg-zinc-800/30 p-2">
-                        <p className="text-[10px] text-zinc-500 mb-1">{ch.column} <span className="text-zinc-700">({ch.chart_type})</span></p>
-                        <iframe srcDoc={ch.html} className="w-full h-48 rounded-lg border-0" title={ch.column} />
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-xs text-zinc-600 py-4 text-center">No charts available for this dataset.</p>
-                )}
+                <h2 className="text-xs font-medium uppercase tracking-wider text-zinc-500 mb-3">Recommended Visualizations</h2>
+                <div className="space-y-1.5">
+                  {chartRecs.filter((c: any) => c.chart_type !== "metric").slice(0, 8).map((rec: any, i: number) => (
+                    <div key={i} className="flex items-center gap-2 rounded-lg bg-zinc-800/30 px-3 py-2">
+                      <span className={`text-[10px] font-medium uppercase px-1.5 py-0.5 rounded ${
+                        rec.chart_type === "line" ? "bg-blue-900/50 text-blue-300" :
+                        rec.chart_type === "bar" ? "bg-emerald-900/50 text-emerald-300" :
+                        rec.chart_type === "pie" ? "bg-purple-900/50 text-purple-300" :
+                        rec.chart_type === "histogram" ? "bg-amber-900/50 text-amber-300" : "bg-zinc-800 text-zinc-400"
+                      }`}>{rec.chart_type}</span>
+                      <span className="text-xs text-zinc-200 flex-1">{rec.column}</span>
+                      <span className="text-[10px] text-zinc-500">{rec.classification}</span>
+                    </div>
+                  ))}
+                  {chartRecs.length === 0 && <p className="text-xs text-zinc-600 py-4 text-center">No chart recommendations — check column types.</p>}
+                </div>
               </div>
 
               {/* Trend Analysis */}
@@ -301,7 +276,6 @@ export default function AnalyticsPage() {
               </div>
             )}
           </>}
-
         </div>
       )}
     </div>
