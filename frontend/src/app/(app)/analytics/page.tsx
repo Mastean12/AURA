@@ -7,7 +7,7 @@ import {
   FileText, Download, Send, Loader2, Table, Hash, AlertTriangle,
   Layers, Lightbulb, Flag, Target, Bot, User, DollarSign, Users,
   Clock, TrendingDown, Building2, ShoppingCart, LineChart,
-  ArrowUpRight, ArrowDownRight,
+  ArrowUpRight, ArrowDownRight, Database, Edit2, Check, X,
 } from "lucide-react";
 import {
   getAnalytics, listDocuments, getInsights, getDatasetHealth,
@@ -44,6 +44,10 @@ export default function AnalyticsPage() {
   const chatSession = useRef("session-" + Math.random().toString(36).slice(2));
   const chatBottom = useRef<HTMLDivElement>(null);
 
+  const [dataIntel, setDataIntel] = useState<Record<string, any> | null>(null);
+  const [editingIntel, setEditingIntel] = useState(false);
+  const [editIntel, setEditIntel] = useState<Record<string, any>>({});
+
   const [exporting, setExporting] = useState(false);
 
   useEffect(() => { if (!fetched) listDocuments().then(setDocs).finally(() => setFetched(true)); }, []);
@@ -69,11 +73,46 @@ export default function AnalyticsPage() {
     setChartInsightsLoading(false);
   }
 
+  const apiBase = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
+  async function fetchDataIntel(docId: number) {
+    try {
+      const token = localStorage.getItem("aura_token");
+      const res = await fetch(`${apiBase}/api/v1/data-intelligence/${docId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const d = await res.json();
+        setDataIntel(d);
+        setEditIntel(d);
+      }
+    } catch {}
+  }
+
+  async function saveDataIntel() {
+    try {
+      const token = localStorage.getItem("aura_token");
+      await fetch(`${apiBase}/api/v1/data-intelligence/${selectedDoc}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          industry: editIntel.industry,
+          dataset_type: editIntel.dataset_type,
+          target_variable: editIntel.target_variable,
+          time_column: editIntel.time_column,
+        }),
+      });
+      setDataIntel(editIntel);
+      setEditingIntel(false);
+    } catch {}
+  }
+
   async function selectDocument(docId: number) {
     setSelectedDoc(docId);
     setAnalytics(null); setCharts(null); setInsights(null); setHealth(null);
     setExecSummary(null); setKpis([]); setChartInsights({});
     setChatMessages([]);
+    setDataIntel(null); setEditingIntel(false);
     const a = await getAnalytics(docId);
     setAnalytics(a);
     setHealthLoading(true); setChartsLoading(true); setKpisLoading(true);
@@ -81,6 +120,7 @@ export default function AnalyticsPage() {
       getDatasetHealth(docId).then(setHealth).finally(() => setHealthLoading(false)),
       getAllCharts(docId).then(setCharts).finally(() => setChartsLoading(false)),
       getKPIs(docId).then((r: KPIResponse) => setKpis(r.kpis)).finally(() => setKpisLoading(false)),
+      fetchDataIntel(docId),
     ]);
   }
 
@@ -175,6 +215,55 @@ export default function AnalyticsPage() {
 
       {selectedDoc && (
         <div className="space-y-6">
+          {/* Dataset Intelligence Bar */}
+          {dataIntel && (
+            <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-4">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <Database className="h-4 w-4 text-blue-400" />
+                  <h3 className="text-xs font-medium uppercase tracking-wider text-zinc-500">Dataset Intelligence</h3>
+                </div>
+                <button onClick={() => setEditingIntel(!editingIntel)}
+                  className="text-[10px] text-zinc-500 hover:text-zinc-300 flex items-center gap-1">
+                  {editingIntel ? <X className="h-3 w-3" /> : <Edit2 className="h-3 w-3" />}
+                  {editingIntel ? "Cancel" : "Override"}
+                </button>
+              </div>
+              <div className="flex flex-wrap gap-x-6 gap-y-1 text-[11px]">
+                {dataIntel.industry && (
+                  <span className="text-zinc-400">Industry: <span className="text-zinc-200 font-medium"
+                    contentEditable={editingIntel} onBlur={e => setEditIntel({...editIntel, industry: e.currentTarget.textContent})}
+                    suppressContentEditableWarning>{dataIntel.industry}</span></span>
+                )}
+                {dataIntel.dataset_type && (
+                  <span className="text-zinc-400">Domain: <span className="text-zinc-200 font-medium"
+                    contentEditable={editingIntel} onBlur={e => setEditIntel({...editIntel, dataset_type: e.currentTarget.textContent})}
+                    suppressContentEditableWarning>{dataIntel.dataset_type}</span></span>
+                )}
+                {dataIntel.target_variable && (
+                  <span className="text-zinc-400">Target: <span className="text-blue-400 font-medium"
+                    contentEditable={editingIntel} onBlur={e => setEditIntel({...editIntel, target_variable: e.currentTarget.textContent})}
+                    suppressContentEditableWarning>{dataIntel.target_variable}</span></span>
+                )}
+                {dataIntel.kpi_details?.length > 0 && (
+                  <span className="text-zinc-400">KPIs:
+                    {dataIntel.kpi_details.slice(0, 4).map((k: any) => (
+                      <span key={k.name} className="ml-1.5 rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] text-emerald-400">{k.name}</span>
+                    ))}
+                  </span>
+                )}
+                {dataIntel.relationships?.length > 0 && (
+                  <span className="text-zinc-500">Relationships: <span className="text-zinc-400">{dataIntel.relationships.length} strong pairs</span></span>
+                )}
+              </div>
+              {editingIntel && (
+                <button onClick={saveDataIntel}
+                  className="mt-2 flex items-center gap-1 rounded bg-blue-600 px-2.5 py-1 text-[10px] font-medium hover:bg-blue-500">
+                  <Check className="h-3 w-3" />Save Override
+                </button>
+              )}
+            </div>
+          )}
           {/* SECTION 1: Executive Summary — manual trigger */}
           {execSummaryLoading ? (
             <div className="h-24 animate-pulse rounded-xl bg-zinc-800/50" />
