@@ -21,6 +21,7 @@ export default function AnalyticsPage() {
   const [loading, setLoading] = useState(false);
   const [businessData, setBusinessData] = useState<Record<string, any> | null>(null);
   const [pipelineStages, setPipelineStages] = useState<any[]>([]);
+  const [execData, setExecData] = useState<Record<string, any> | null>(null);
   const token = typeof window !== "undefined" ? localStorage.getItem("aura_token") : "";
   const authH = { "Content-Type": "application/json", Authorization: `Bearer ${token}` } as Record<string, string>;
 
@@ -42,10 +43,16 @@ export default function AnalyticsPage() {
     try {
       const a = await getAnalytics(selectedDoc);
       setAnalytics(a as any);
-      const res = await fetch(`${apiBase}/api/v1/analytics/business-analytics`, {
-        method: "POST", headers: authH, body: JSON.stringify({ doc_id: selectedDoc }),
-      });
-      if (res.ok) setBusinessData(await res.json());
+      const [bizRes, execRes] = await Promise.all([
+        fetch(`${apiBase}/api/v1/analytics/business-analytics`, {
+          method: "POST", headers: authH, body: JSON.stringify({ doc_id: selectedDoc }),
+        }),
+        fetch(`${apiBase}/api/v1/analytics/executive-intelligence-v3`, {
+          method: "POST", headers: authH, body: JSON.stringify({ doc_id: selectedDoc }),
+        }),
+      ]);
+      if (bizRes.ok) setBusinessData(await bizRes.json());
+      if (execRes.ok) setExecData(await execRes.json());
       setPipelineStages(prev => prev.map(s => ({ ...s, status: "completed" })));
     } catch {} finally { setLoading(false); }
   }
@@ -57,6 +64,17 @@ export default function AnalyticsPage() {
   const comparative = businessData?.comparative_analysis || [];
   const correlations = businessData?.correlations || [];
   const kpis = kpiSummary.kpis || [];
+  const execBH = execData?.business_health || {};
+  const execImpact = execData?.business_impact || {};
+  const execFindings = execData?.key_findings || [];
+  const execRootCauses = execData?.root_causes || [];
+  const execRisks = execData?.risks || [];
+  const execOpps = execData?.opportunities || [];
+  const execRecs = execData?.recommendations || [];
+  const growthRates = execData?.growth_rates || [];
+  const regional = execData?.regional_breakdown || [];
+  const deptData = execData?.department_breakdown || [];
+  const marginAnalysis = execData?.margin_analysis;
 
   return (
     <div className="mx-auto max-w-7xl space-y-6 p-6">
@@ -134,6 +152,186 @@ export default function AnalyticsPage() {
                           {Math.abs(kpi.change).toFixed(1)}%
                         </div>
                       )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Section 4: Executive Intelligence */}
+            {execData?.executive_summary && (
+              <div className="rounded-xl border border-blue-900/30 bg-blue-950/20 p-5">
+                <div className="flex items-center gap-2 mb-2">
+                  <Brain className="h-5 w-5 text-blue-400" />
+                  <h2 className="text-sm font-medium uppercase tracking-wider text-blue-400">Executive Summary</h2>
+                  <span className="ml-auto text-xs text-zinc-500">{(execData.confidence * 100).toFixed(0)}% confidence</span>
+                </div>
+                <p className="text-sm leading-relaxed text-zinc-200">{execData.executive_summary}</p>
+              </div>
+            )}
+
+            {/* Business Health Dashboard */}
+            {execBH.overall && (
+              <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-5">
+                <div className="flex items-center justify-between mb-3">
+                  <h2 className="text-xs font-medium uppercase tracking-wider text-zinc-500">Business Health Dashboard</h2>
+                  <span className={`text-xl font-bold ${execBH.overall >= 70 ? "text-emerald-400" : execBH.overall >= 40 ? "text-amber-400" : "text-red-400"}`}>{execBH.overall}<span className="text-xs text-zinc-600">/100</span></span>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-6">
+                  {[
+                    { label: "Revenue", value: execBH.revenue_health, icon: DollarSign },
+                    { label: "Cost", value: execBH.cost_health, icon: TrendingUp },
+                    { label: "Growth", value: execBH.growth_health, icon: TrendingUp },
+                    { label: "Risk", value: execBH.risk_health, icon: Shield },
+                    { label: "Operations", value: execBH.operations_health, icon: Clock },
+                    { label: "Customers", value: execBH.customer_health, icon: Users },
+                  ].filter(m => m.value).map(m => (
+                    <div key={m.label} className="text-center rounded-lg bg-zinc-800/30 p-2">
+                      <p className="text-[10px] text-zinc-500">{m.label}</p>
+                      <p className={`text-lg font-bold ${m.value >= 70 ? "text-emerald-400" : m.value >= 40 ? "text-amber-400" : "text-red-400"}`}>{m.value}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Business Impact */}
+            {execImpact.revenue_impact && (
+              <div className="grid gap-4 sm:grid-cols-2">
+                {[{ label: "Revenue Impact", value: execImpact.revenue_impact, icon: DollarSign, color: "text-emerald-400" },
+                  { label: "Cost Impact", value: execImpact.cost_impact, icon: TrendingUp, color: "text-red-400" },
+                  { label: "Operational Impact", value: execImpact.operational_impact, icon: Clock, color: "text-blue-400" },
+                  { label: "Customer Impact", value: execImpact.customer_impact, icon: Users, color: "text-purple-400" },
+                ].filter(m => m.value).map(m => (
+                  <div key={m.label} className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-3">
+                    <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-zinc-500 mb-1">
+                      <m.icon className={`h-3.5 w-3.5 ${m.color}`} />{m.label}
+                    </div>
+                    <p className="text-xs text-zinc-300">{m.value}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Executive Findings */}
+            {execFindings.length > 0 && (
+              <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-5">
+                <div className="flex items-center gap-2 mb-3">
+                  <Lightbulb className="h-5 w-5 text-emerald-400" />
+                  <h2 className="text-sm font-medium uppercase tracking-wider text-zinc-500">Executive Findings</h2>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {execFindings.slice(0, 6).map((f: any, i: number) => (
+                    <div key={i} className="rounded-lg bg-zinc-800/30 p-3">
+                      <div className="flex items-start gap-2">
+                        <span className={`mt-1 h-2 w-2 shrink-0 rounded-full ${f.impact === "high" ? "bg-red-500" : f.impact === "medium" ? "bg-amber-500" : "bg-blue-500"}`} />
+                        <div>
+                          <p className="text-xs font-semibold text-zinc-200">{f.title}</p>
+                          {f.detail && <p className="text-[11px] text-zinc-400 mt-0.5">{f.detail}</p>}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Root Causes */}
+            {execRootCauses.length > 0 && (
+              <div className="rounded-xl border border-amber-800/30 bg-amber-950/20 p-5">
+                <div className="flex items-center gap-2 mb-3">
+                  <AlertTriangle className="h-5 w-5 text-amber-400" />
+                  <h2 className="text-sm font-medium uppercase tracking-wider text-amber-400">Root Cause Analysis</h2>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {execRootCauses.slice(0, 4).map((rc: any, i: number) => (
+                    <div key={i} className="rounded-lg bg-zinc-800/30 p-3">
+                      <p className="text-xs font-medium text-zinc-200">{rc.cause}</p>
+                      {rc.evidence && <p className="text-[11px] text-zinc-400 mt-0.5">Evidence: {rc.evidence}</p>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Growth & Performance Breakdown */}
+            {(growthRates.length > 0 || regional.length > 0 || deptData.length > 0) && (
+              <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-5">
+                <h2 className="text-xs font-medium uppercase tracking-wider text-zinc-500 mb-3">Growth & Performance Breakdown</h2>
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {growthRates.slice(0, 2).map((g: any, i: number) => (
+                    <div key={i} className="rounded-lg bg-zinc-800/30 p-3">
+                      <p className="text-[10px] text-zinc-500">{g.metric}</p>
+                      <p className={`text-lg font-bold mt-0.5 ${g.change_pct >= 0 ? "text-emerald-400" : "text-red-400"}`}>{g.change_pct >= 0 ? "+" : ""}{g.change_pct}%</p>
+                      <p className="text-[10px] text-zinc-500">{g.directional_word}</p>
+                    </div>
+                  ))}
+                  {regional.slice(0, 2).map((r: any, i: number) => (
+                    <div key={`reg-${i}`} className="rounded-lg bg-blue-950/30 border border-blue-800/30 p-3">
+                      <p className="text-[10px] text-blue-400">{r.segment}</p>
+                      <p className="text-sm font-bold text-zinc-200 mt-0.5">{r.contribution_pct}%</p>
+                      <p className="text-[10px] text-zinc-500">of {r.kpi}</p>
+                    </div>
+                  ))}
+                  {deptData.slice(0, 2).map((d: any, i: number) => (
+                    <div key={`dept-${i}`} className="rounded-lg bg-amber-950/30 border border-amber-800/30 p-3">
+                      <p className="text-[10px] text-amber-400">{d.kpi} by Department</p>
+                      <p className="text-xs text-zinc-300 mt-1">Best: <span className="text-emerald-400">{d.best_department}</span></p>
+                      <p className="text-xs text-zinc-300">Worst: <span className="text-red-400">{d.worst_department}</span></p>
+                      <p className="text-[10px] text-zinc-500 mt-0.5">{d.gap_pct}% gap</p>
+                    </div>
+                  ))}
+                  {marginAnalysis && (
+                    <div className="rounded-lg bg-red-950/30 border border-red-800/30 p-3">
+                      <p className="text-[10px] text-red-400">Margin Alert</p>
+                      <p className="text-[11px] text-zinc-300 mt-1">{marginAnalysis.insight}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Risks */}
+            {execRisks.length > 0 && (
+              <div className="rounded-xl border border-red-800/30 bg-red-950/20 p-5">
+                <div className="flex items-center gap-2 mb-3">
+                  <AlertTriangle className="h-5 w-5 text-red-400" />
+                  <h2 className="text-sm font-medium uppercase tracking-wider text-red-400">Business Risks</h2>
+                </div>
+                <div className="space-y-2">
+                  {execRisks.slice(0, 4).map((r: any, i: number) => (
+                    <div key={i} className="rounded-lg bg-zinc-800/30 p-3">
+                      <div className="flex items-center justify-between mb-1">
+                        <p className="text-xs font-semibold text-zinc-200">{r.name}</p>
+                        <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${r.severity === "Critical" || r.severity === "High" ? "bg-red-900/50 text-red-300" : "bg-amber-900/50 text-amber-300"}`}>{r.severity}</span>
+                      </div>
+                      <p className="text-[11px] text-zinc-400">{r.description}</p>
+                      {r.financial_exposure && <p className="text-[10px] text-amber-400 mt-0.5">Exposure: {r.financial_exposure}</p>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Recommendations */}
+            {execRecs.length > 0 && (
+              <div className="rounded-xl border border-purple-800/30 bg-purple-950/20 p-5">
+                <div className="flex items-center gap-2 mb-3">
+                  <CheckCircle className="h-5 w-5 text-purple-400" />
+                  <h2 className="text-sm font-medium uppercase tracking-wider text-purple-400">Recommended Actions</h2>
+                </div>
+                <div className="space-y-2">
+                  {execRecs.slice(0, 4).map((r: any, i: number) => (
+                    <div key={i} className="flex items-start gap-3 rounded-lg bg-zinc-800/30 p-3">
+                      <span className={`mt-0.5 h-2 w-2 shrink-0 rounded-full ${r.priority === "Critical" || r.priority === "High" ? "bg-red-500" : r.priority === "Medium" ? "bg-amber-500" : "bg-blue-500"}`} />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <p className="text-xs font-semibold text-zinc-200">{r.title}</p>
+                          <span className={`rounded px-1.5 py-0.5 text-[9px] font-medium uppercase ${r.priority === "Critical" || r.priority === "High" ? "bg-red-900/50 text-red-300" : r.priority === "Medium" ? "bg-amber-900/50 text-amber-300" : "bg-blue-900/50 text-blue-300"}`}>{r.priority}</span>
+                        </div>
+                        {r.description && <p className="text-[11px] text-zinc-400 mt-0.5">{r.description}</p>}
+                        {r.expected_outcome && <p className="text-[10px] text-zinc-500 mt-0.5">Outcome: {r.expected_outcome}</p>}
+                      </div>
                     </div>
                   ))}
                 </div>
