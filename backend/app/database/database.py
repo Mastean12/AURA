@@ -50,6 +50,7 @@ async def _run_migrations(conn):
         "ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE",
         "ALTER TABLE workspace_members ADD COLUMN IF NOT EXISTS joined_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()",
         "CREATE TABLE IF NOT EXISTS workspace_settings (id SERIAL PRIMARY KEY, workspace_id INTEGER REFERENCES workspaces(id) ON DELETE CASCADE UNIQUE, ai_provider VARCHAR(20) DEFAULT 'gemini', executive_insights INTEGER DEFAULT 1, forecasting INTEGER DEFAULT 1, risk_analysis INTEGER DEFAULT 1, recommendations INTEGER DEFAULT 1, allow_uploads INTEGER DEFAULT 1, allow_ai_chat INTEGER DEFAULT 1, allow_analytics INTEGER DEFAULT 1, allow_pdf_export INTEGER DEFAULT 1, allow_executive_reports INTEGER DEFAULT 1, created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())",
+        "CREATE TABLE IF NOT EXISTS dataset_metadata (id SERIAL PRIMARY KEY, doc_id INTEGER UNIQUE, industry VARCHAR(100), dataset_type VARCHAR(100), target_variable VARCHAR(255), time_column VARCHAR(255), kpis TEXT, identifier_columns TEXT, overridden BOOLEAN DEFAULT FALSE, created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW())",
     ]
     for stmt in migrations:
         try:
