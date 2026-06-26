@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import {
   LayoutDashboard, Sparkles, Upload, MessageSquare, BarChart3,
   TrendingUp, Building2, Brain, FileText, ScrollText, Shield,
-  Users, Settings, AlertTriangle, Target, CreditCard,
+  Users,   Settings, AlertTriangle, Target, CreditCard, Activity,
 } from "lucide-react";
 
 const navGroups = [
@@ -21,6 +21,7 @@ const navGroups = [
       { href: "/upload", label: "Document Upload", icon: Upload },
       { href: "/chat", label: "Knowledge Base", icon: MessageSquare },
       { href: "/analytics", label: "Analytics", icon: BarChart3 },
+      { href: "/analytics/pipeline", label: "Pipeline", icon: Activity },
       { href: "/predictive", label: "Predictive", icon: TrendingUp },
     ],
   },

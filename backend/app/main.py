@@ -23,6 +23,7 @@ from app.api.workspaces import router as workspaces_router
 from app.api.organization import router as organization_router
 from app.api.users import router as users_router
 from app.api.data_intelligence import router as data_intel_router
+from app.api.pipeline import router as pipeline_router
 from app.api.billing import router as billing_router
 
 # Import all models so SQLAlchemy metadata registers them for create_all
@@ -106,6 +107,7 @@ app.include_router(organization_router, prefix="/api/v1")
 app.include_router(users_router, prefix="/api/v1")
 app.include_router(billing_router, prefix="/api/v1")
 app.include_router(data_intel_router, prefix="/api/v1")
+app.include_router(pipeline_router, prefix="/api/v1")
 
 
 @app.get("/")
