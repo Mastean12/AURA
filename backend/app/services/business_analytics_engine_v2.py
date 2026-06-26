@@ -138,6 +138,22 @@ async def get_business_analytics(doc_id: int) -> dict[str, Any]:
                         "bottom_value": float(grouped["mean"].min()) if "mean" in grouped else 0,
                     })
 
+    # Generate actual Plotly charts for top recommendations
+    from app.services.chart_service import _make_chart
+    rendered_charts = []
+    for rec in chart_recs[:6]:
+        try:
+            chart = _make_chart(df, rec["column"], rec["chart_type"], 280)
+            rendered_charts.append({
+                "column": rec["column"],
+                "chart_type": rec["chart_type"],
+                "classification": rec["classification"],
+                "html": chart["html"],
+                "business_reason": rec["business_reason"],
+            })
+        except Exception:
+            pass
+
     return {
         "kpi_summary": {
             "total_detected": len(kpis),
@@ -145,6 +161,7 @@ async def get_business_analytics(doc_id: int) -> dict[str, Any]:
             "kpis": kpis[:10],
         },
         "chart_recommendations": chart_recs[:12],
+        "charts": rendered_charts,
         "trend_analysis": trend_analysis,
         "comparative_analysis": comparative[:6],
         "correlations": correlations.get("strong_correlations", [])[:8],

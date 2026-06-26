@@ -42,6 +42,7 @@ export default function AnalyticsPage() {
   const kpiSummary = businessData?.kpi_summary || {};
   const chartRecs = businessData?.chart_recommendations || [];
   const trend = businessData?.trend_analysis || {};
+  const charts = businessData?.charts || [];
   const comparative = businessData?.comparative_analysis || [];
   const correlations = businessData?.correlations || [];
   const kpis = kpiSummary.kpis || [];
@@ -164,6 +165,28 @@ export default function AnalyticsPage() {
                 </div>
               )}
             </div>
+
+            {/* Key Visualizations */}
+            {charts.length > 0 && (
+              <div>
+                <div className="flex items-center gap-2 mb-3">
+                  <BarChart3 className="h-5 w-5 text-zinc-400" />
+                  <h2 className="text-sm font-medium uppercase tracking-wider text-zinc-500">Key Visualizations</h2>
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {charts.map((ch: any, i: number) => (
+                    <div key={i} className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-3">
+                      <h3 className="mb-1 text-xs font-medium uppercase tracking-wider text-zinc-500 flex items-center gap-1.5">
+                        <BarChart3 className="h-3.5 w-3.5" />
+                        {ch.column}
+                        <span className="text-[10px] text-zinc-600 font-normal lowercase">({ch.chart_type} — {ch.business_reason})</span>
+                      </h3>
+                      <iframe srcDoc={ch.html} className="w-full h-64 rounded-lg border-0" title={ch.column} />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Comparative Analysis */}
             {comparative.length > 0 && (
