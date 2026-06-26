@@ -168,26 +168,23 @@ export default function AnalyticsPage() {
               </div>
             )}
 
-            {/* Chart Recommendations + Trend Analysis */}
+             {/* Key Visualizations + Trend Analysis */}
             <div className="grid gap-6 lg:grid-cols-2">
-              {/* Recommended Charts */}
+              {/* Rendered Charts */}
               <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-5">
-                <h2 className="text-xs font-medium uppercase tracking-wider text-zinc-500 mb-3">Recommended Visualizations</h2>
-                <div className="space-y-1.5">
-                  {chartRecs.filter((c: any) => c.chart_type !== "metric").slice(0, 8).map((rec: any, i: number) => (
-                    <div key={i} className="flex items-center gap-2 rounded-lg bg-zinc-800/30 px-3 py-2">
-                      <span className={`text-[10px] font-medium uppercase px-1.5 py-0.5 rounded ${
-                        rec.chart_type === "line" ? "bg-blue-900/50 text-blue-300" :
-                        rec.chart_type === "bar" ? "bg-emerald-900/50 text-emerald-300" :
-                        rec.chart_type === "pie" ? "bg-purple-900/50 text-purple-300" :
-                        rec.chart_type === "histogram" ? "bg-amber-900/50 text-amber-300" : "bg-zinc-800 text-zinc-400"
-                      }`}>{rec.chart_type}</span>
-                      <span className="text-xs text-zinc-200 flex-1">{rec.column}</span>
-                      <span className="text-[10px] text-zinc-500">{rec.classification}</span>
-                    </div>
-                  ))}
-                  {chartRecs.length === 0 && <p className="text-xs text-zinc-600 py-4 text-center">No chart recommendations — check column types.</p>}
-                </div>
+                <h2 className="text-xs font-medium uppercase tracking-wider text-zinc-500 mb-3">Key Visualizations</h2>
+                {charts.length > 0 ? (
+                  <div className="space-y-3">
+                    {charts.slice(0, 4).map((ch: any, i: number) => (
+                      <div key={i} className="rounded-lg bg-zinc-800/30 p-2">
+                        <p className="text-[10px] text-zinc-500 mb-1">{ch.column} <span className="text-zinc-700">({ch.chart_type})</span></p>
+                        <iframe srcDoc={ch.html} className="w-full h-48 rounded-lg border-0" title={ch.column} />
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-zinc-600 py-4 text-center">No charts available for this dataset.</p>
+                )}
               </div>
 
               {/* Trend Analysis */}
