@@ -180,3 +180,26 @@ async def quality_analysis(payload: AnalyticsRequest):
             return obj.tolist()
         return obj
     return _convert(result)
+
+
+@router.post("/business-analytics")
+async def business_analytics(payload: AnalyticsRequest):
+    """Run business analytics: KPI detection, chart recommendations, trend/comparative analysis."""
+    from app.services.business_analytics_engine_v2 import get_business_analytics
+    import numpy as np
+    result = await get_business_analytics(payload.doc_id)
+    def _convert(obj):
+        if isinstance(obj, dict):
+            return {k: _convert(v) for k, v in obj.items()}
+        elif isinstance(obj, list):
+            return [_convert(v) for v in obj]
+        elif isinstance(obj, np.integer):
+            return int(obj)
+        elif isinstance(obj, np.floating):
+            return float(obj)
+        elif isinstance(obj, np.bool_):
+            return bool(obj)
+        elif isinstance(obj, np.ndarray):
+            return obj.tolist()
+        return obj
+    return _convert(result)

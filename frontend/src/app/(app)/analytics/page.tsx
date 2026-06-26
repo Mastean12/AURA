@@ -1,763 +1,236 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
-import type React from "react";
+import { useState, useEffect, useRef } from "react";
 import {
-  Brain, Shield, BarChart3, PieChart, TrendingUp, MessageSquare,
-  FileText, Download, Send, Loader2, Table, Hash, AlertTriangle,
-  Layers, Lightbulb, Flag, Target, Bot, User, DollarSign, Users,
-  Clock, TrendingDown, Building2, ShoppingCart, LineChart,
-  ArrowUpRight, ArrowDownRight, Database, Edit2, Check, X,
+  Brain, Shield, BarChart3, TrendingUp, MessageSquare,
+  FileText, Send, Loader2, AlertTriangle,
+  Lightbulb, Flag, Bot, User, DollarSign, Users,
+  Clock, ArrowUpRight, ArrowDownRight, Database, Edit2, Check, X,
+  Target, LineChart, PieChart, Activity,
 } from "lucide-react";
-import {
-  getAnalytics, listDocuments, getInsights, getDatasetHealth,
-  getAllCharts, analyticsChat, exportReport, getExecutiveSummary,
-  getKPIs, getChartInsight,
-} from "@/lib/api";
-import type {
-  DocumentResponse, AnalyticsResponse, ChartsResponse,
-  InsightsResponse, HealthResponse, AnalyticsChatResponse,
-  ExecutiveSummaryResponse, KPIItem, KPIResponse, ChartInsightResponse,
-} from "@/types";
+import { listDocuments, getAnalytics } from "@/lib/api";
+import type { DocumentResponse } from "@/types";
+
+const apiBase = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 export default function AnalyticsPage() {
   const [docs, setDocs] = useState<DocumentResponse[]>([]);
   const [selectedDoc, setSelectedDoc] = useState<number | null>(null);
-  const [analytics, setAnalytics] = useState<AnalyticsResponse | null>(null);
-  const [charts, setCharts] = useState<ChartsResponse | null>(null);
-  const [insights, setInsights] = useState<InsightsResponse | null>(null);
-  const [health, setHealth] = useState<HealthResponse | null>(null);
-  const [execSummary, setExecSummary] = useState<ExecutiveSummaryResponse | null>(null);
-  const [kpis, setKpis] = useState<KPIItem[]>([]);
-  const [chartInsights, setChartInsights] = useState<Record<string, string>>({});
-  const [healthLoading, setHealthLoading] = useState(false);
-  const [insightsLoading, setInsightsLoading] = useState(false);
-  const [chartsLoading, setChartsLoading] = useState(false);
-  const [execSummaryLoading, setExecSummaryLoading] = useState(false);
-  const [kpisLoading, setKpisLoading] = useState(false);
-  const [chartInsightsLoading, setChartInsightsLoading] = useState(false);
+  const [analytics, setAnalytics] = useState<Record<string, any> | null>(null);
   const [fetched, setFetched] = useState(false);
-
-  const [chatMessages, setChatMessages] = useState<{role:string;content:string}[]>([]);
-  const [chatInput, setChatInput] = useState("");
-  const [chatLoading, setChatLoading] = useState(false);
-  const chatSession = useRef("session-" + Math.random().toString(36).slice(2));
-  const chatBottom = useRef<HTMLDivElement>(null);
-
-  const [dataIntel, setDataIntel] = useState<Record<string, any> | null>(null);
-  const [editingIntel, setEditingIntel] = useState(false);
-  const [editIntel, setEditIntel] = useState<Record<string, any>>({});
-  const [qualityReport, setQualityReport] = useState<Record<string, any> | null>(null);
-  const [qualityLoading, setQualityLoading] = useState(false);
-  const [showAdvancedStats, setShowAdvancedStats] = useState(false);
-
-  const [exporting, setExporting] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [businessData, setBusinessData] = useState<Record<string, any> | null>(null);
+  const token = typeof window !== "undefined" ? localStorage.getItem("aura_token") : "";
+  const authH = { "Content-Type": "application/json", Authorization: `Bearer ${token}` } as Record<string, string>;
 
   useEffect(() => { if (!fetched) listDocuments().then(setDocs).finally(() => setFetched(true)); }, []);
-  useEffect(() => { chatBottom.current?.scrollIntoView({ behavior: "smooth" }); }, [chatMessages]);
 
-  async function loadChartInsights() {
-    if (!charts || !selectedDoc) return;
-    setChartInsightsLoading(true);
-    setChartInsights({});
-    const chartTypes = ["bar", "pie", "line", "area", "histogram", "distribution"];
-    const results: Record<string, string> = {};
-    for (const ct of chartTypes) {
-      if (charts[ct as keyof ChartsResponse]) {
-        try {
-          const res = await getChartInsight(selectedDoc, ct, charts.column);
-          results[ct] = res.insight;
-        } catch {
-          results[ct] = "Chart insight temporarily unavailable.";
-        }
-      }
-    }
-    setChartInsights(results);
-    setChartInsightsLoading(false);
-  }
-
-  const apiBase = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-
-  async function fetchDataIntel(docId: number) {
+  async function runAnalysis() {
+    if (!selectedDoc) return;
+    setLoading(true);
     try {
+      const a = await getAnalytics(selectedDoc);
+      setAnalytics(a as any);
       const token = localStorage.getItem("aura_token");
-      const res = await fetch(`${apiBase}/api/v1/data-intelligence/${docId}`, {
-        headers: { Authorization: `Bearer ${token}` },
+      const res = await fetch(`${apiBase}/api/v1/analytics/business-analytics`, {
+        method: "POST", headers: authH, body: JSON.stringify({ doc_id: selectedDoc }),
       });
-      if (res.ok) {
-        const d = await res.json();
-        setDataIntel(d);
-        setEditIntel(d);
-      }
-    } catch {}
+      if (res.ok) setBusinessData(await res.json());
+    } catch {} finally { setLoading(false); }
   }
 
-  async function saveDataIntel() {
-    try {
-      const token = localStorage.getItem("aura_token");
-      await fetch(`${apiBase}/api/v1/data-intelligence/${selectedDoc}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-          industry: editIntel.industry,
-          dataset_type: editIntel.dataset_type,
-          target_variable: editIntel.target_variable,
-          time_column: editIntel.time_column,
-        }),
-      });
-      setDataIntel(editIntel);
-      setEditingIntel(false);
-    } catch {}
-  }
-
-  async function selectDocument(docId: number) {
-    setSelectedDoc(docId);
-    setAnalytics(null); setCharts(null); setInsights(null); setHealth(null);
-    setExecSummary(null); setKpis([]); setChartInsights({});
-    setChatMessages([]);
-    setDataIntel(null); setEditingIntel(false);
-    const a = await getAnalytics(docId);
-    setAnalytics(a);
-    setHealthLoading(true); setChartsLoading(true); setKpisLoading(true);
-    Promise.all([
-      getDatasetHealth(docId).then(setHealth).finally(() => setHealthLoading(false)),
-      getAllCharts(docId).then(setCharts).finally(() => setChartsLoading(false)),
-      getKPIs(docId).then((r: KPIResponse) => setKpis(r.kpis)).finally(() => setKpisLoading(false)),
-      fetchDataIntel(docId),
-    ]);
-  }
-
-  async function analyzeInsights() {
-    if (!selectedDoc) return;
-    setInsightsLoading(true);
-    try { setInsights(await getInsights(selectedDoc)); } finally { setInsightsLoading(false); }
-  }
-
-  async function runQualityAnalysis() {
-    if (!selectedDoc) return;
-    setQualityLoading(true);
-    try {
-      const token = localStorage.getItem("aura_token");
-      const res = await fetch(`${apiBase}/api/v1/analytics/quality-analysis`, {
-        method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ doc_id: selectedDoc }),
-      });
-      if (res.ok) setQualityReport(await res.json());
-    } catch {} finally { setQualityLoading(false); }
-  }
-
-  async function analyzeExecutiveSummary() {
-    if (!selectedDoc) return;
-    setExecSummaryLoading(true);
-    try { setExecSummary(await getExecutiveSummary(selectedDoc)); } finally { setExecSummaryLoading(false); }
-  }
-
-  async function analyzeChartInsights() {
-    if (!charts || !selectedDoc) return;
-    setChartInsightsLoading(true);
-    setChartInsights({});
-    const results: Record<string, string> = {};
-    const items = (charts as any).charts || [];
-    for (const chart of items) {
-      try {
-        const res = await getChartInsight(selectedDoc, chart.chart_type, chart.column);
-        results[chart.column] = res.insight;
-      } catch {
-        results[chart.column] = "Chart insight temporarily unavailable.";
-      }
-    }
-    setChartInsights(results);
-    setChartInsightsLoading(false);
-  }
-
-  async function sendChat() {
-    if (!chatInput.trim() || !selectedDoc || chatLoading) return;
-    const q = chatInput;
-    setChatInput("");
-    setChatMessages(prev => [...prev, { role: "user", content: q }]);
-    setChatLoading(true);
-    try {
-      const res = await analyticsChat(selectedDoc, q, chatSession.current);
-      setChatMessages(prev => [...prev, { role: "assistant", content: res.answer }]);
-    } catch {
-      setChatMessages(prev => [...prev, { role: "assistant", content: "Error getting response." }]);
-    } finally { setChatLoading(false); }
-  }
-
-  async function handleExport() {
-    if (!selectedDoc) return;
-    setExporting(true);
-    try {
-      const blob = await exportReport(selectedDoc);
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url; a.download = `aura-report-${selectedDoc}.pdf`; a.click();
-      URL.revokeObjectURL(url);
-    } finally { setExporting(false); }
-  }
-
-  const missingTotal = analytics?.columns.reduce((s, c) => s + c.missing, 0) ?? 0;
-  const numericCount = analytics?.columns.filter(c => c.dtype === "numeric").length ?? 0;
-  const catCount = analytics?.columns.filter(c => c.dtype === "categorical").length ?? 0;
+  const kpiSummary = businessData?.kpi_summary || {};
+  const chartRecs = businessData?.chart_recommendations || [];
+  const trend = businessData?.trend_analysis || {};
+  const comparative = businessData?.comparative_analysis || [];
+  const correlations = businessData?.correlations || [];
+  const kpis = kpiSummary.kpis || [];
 
   return (
     <div className="mx-auto max-w-7xl space-y-6 p-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Analytics</h1>
-          <p className="text-sm text-zinc-500">AI-powered executive intelligence platform</p>
+          <h1 className="text-2xl font-semibold tracking-tight">Business Analytics</h1>
+          <p className="text-sm text-zinc-500">Executive insights, KPIs, trends, and comparative analysis</p>
         </div>
-        <button onClick={handleExport} disabled={!selectedDoc || exporting}
-          className="flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium hover:bg-blue-500 disabled:opacity-50">
-          {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-          {exporting ? "Exporting..." : "Export Report"}
-        </button>
       </div>
 
-      {/* Doc selector */}
       <div className="flex flex-wrap gap-2">
         {docs.map(d => (
-          <button key={d.id} onClick={() => selectDocument(d.id)}
-            className={`rounded-xl border px-4 py-2 text-sm transition-colors ${
-              selectedDoc === d.id ? "border-blue-600 bg-blue-600/20 text-blue-300" : "border-zinc-800 bg-zinc-900/50 text-zinc-400 hover:border-zinc-700"
-            }`}>
+          <button key={d.id} onClick={() => { setSelectedDoc(d.id); setBusinessData(null); }}
+            className={`rounded-xl border px-4 py-2 text-sm transition-colors ${selectedDoc === d.id ? "border-blue-600 bg-blue-600/20 text-blue-300" : "border-zinc-800 bg-zinc-900/50 text-zinc-400 hover:border-zinc-700"}`}>
             {d.title.length > 30 ? d.title.slice(0, 30) + "..." : d.title}
           </button>
         ))}
-        {!fetched && <div className="h-10 w-40 animate-pulse rounded-xl bg-zinc-800" />}
-        {fetched && docs.length === 0 && <p className="text-sm text-zinc-600">No documents uploaded yet.</p>}
       </div>
 
       {selectedDoc && (
         <div className="space-y-6">
-          {/* Dataset Intelligence Bar */}
-          {dataIntel && (
-            <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-4">
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <Database className="h-4 w-4 text-blue-400" />
-                  <h3 className="text-xs font-medium uppercase tracking-wider text-zinc-500">Dataset Intelligence</h3>
-                </div>
-                <button onClick={() => setEditingIntel(!editingIntel)}
-                  className="text-[10px] text-zinc-500 hover:text-zinc-300 flex items-center gap-1">
-                  {editingIntel ? <X className="h-3 w-3" /> : <Edit2 className="h-3 w-3" />}
-                  {editingIntel ? "Cancel" : "Override"}
-                </button>
-              </div>
-              <div className="flex flex-wrap gap-x-6 gap-y-1 text-[11px]">
-                {dataIntel.industry && (
-                  <span className="text-zinc-400">Industry: <span className="text-zinc-200 font-medium"
-                    contentEditable={editingIntel} onBlur={e => setEditIntel({...editIntel, industry: e.currentTarget.textContent})}
-                    suppressContentEditableWarning>{dataIntel.industry}</span></span>
-                )}
-                {dataIntel.dataset_type && (
-                  <span className="text-zinc-400">Domain: <span className="text-zinc-200 font-medium"
-                    contentEditable={editingIntel} onBlur={e => setEditIntel({...editIntel, dataset_type: e.currentTarget.textContent})}
-                    suppressContentEditableWarning>{dataIntel.dataset_type}</span></span>
-                )}
-                {dataIntel.target_variable && (
-                  <span className="text-zinc-400">Target: <span className="text-blue-400 font-medium"
-                    contentEditable={editingIntel} onBlur={e => setEditIntel({...editIntel, target_variable: e.currentTarget.textContent})}
-                    suppressContentEditableWarning>{dataIntel.target_variable}</span></span>
-                )}
-                {dataIntel.kpi_details?.length > 0 && (
-                  <span className="text-zinc-400">KPIs:
-                    {dataIntel.kpi_details.slice(0, 4).map((k: any) => (
-                      <span key={k.name} className="ml-1.5 rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] text-emerald-400">{k.name}</span>
-                    ))}
-                  </span>
-                )}
-                {dataIntel.relationships?.length > 0 && (
-                  <span className="text-zinc-500">Relationships: <span className="text-zinc-400">{dataIntel.relationships.length} strong pairs</span></span>
-                )}
-              </div>
-              {editingIntel && (
-                <button onClick={saveDataIntel}
-                  className="mt-2 flex items-center gap-1 rounded bg-blue-600 px-2.5 py-1 text-[10px] font-medium hover:bg-blue-500">
-                  <Check className="h-3 w-3" />Save Override
-                </button>
-              )}
-            </div>
-          )}
-          {/* SECTION 1: Executive Summary — manual trigger */}
-          {execSummaryLoading ? (
-            <div className="h-24 animate-pulse rounded-xl bg-zinc-800/50" />
-          ) : execSummary ? (
-            <div className="rounded-xl border border-emerald-900/30 bg-emerald-950/20 p-5">
-              <div className="flex items-center gap-2 mb-3">
-                <FileText className="h-5 w-5 text-emerald-400" />
-                <h2 className="text-sm font-medium uppercase tracking-wider text-emerald-400">AURA Executive Summary</h2>
-                <span className="ml-auto rounded-full bg-emerald-950 px-2 py-0.5 text-xs text-emerald-400">
-                  {Math.round(execSummary.confidence * 100)}% confidence
-                </span>
-              </div>
-              <p className="text-sm leading-relaxed text-zinc-200">{execSummary.summary}</p>
-            </div>
-          ) : (
-            <button onClick={analyzeExecutiveSummary} className="flex items-center gap-2 rounded-xl border border-emerald-800/30 bg-emerald-950/20 px-5 py-4 text-sm text-emerald-400 hover:bg-emerald-950/40 w-full">
-              <FileText className="h-5 w-5" />
-              Generate Executive Summary
+          {!businessData && !loading && (
+            <button onClick={runAnalysis} className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-emerald-600 px-6 py-3 text-sm font-medium hover:from-blue-500 hover:to-emerald-500 shadow-lg shadow-blue-600/20">
+              <Activity className="h-5 w-5" />Run Business Analysis
             </button>
           )}
+          {loading && <div className="space-y-4">{[1,2,3,4].map(i => <div key={i} className="h-24 animate-pulse rounded-xl bg-zinc-800/50" />)}</div>}
 
-          {/* SECTION 2: Business Health Score */}
-          {healthLoading ? (
-            <div className="h-32 animate-pulse rounded-xl bg-zinc-800/50" />
-          ) : health && (
-            <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-5">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Shield className="h-5 w-5 text-zinc-400" />
-                  <h2 className="text-sm font-medium uppercase tracking-wider text-zinc-500">Business Health Score</h2>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className={`text-3xl font-bold ${
-                    health.color === "green" ? "text-emerald-400" : health.color === "yellow" ? "text-amber-400" : "text-red-400"
-                  }`}>{health.overall}<span className="text-lg text-zinc-600">/100</span></span>
-                  <span className={`rounded-full px-3 py-1 text-xs font-medium ${
-                    health.color === "green" ? "bg-emerald-950 text-emerald-400" : health.color === "yellow" ? "bg-amber-950 text-amber-400" : "bg-red-950 text-red-400"
-                  }`}>{health.label}</span>
+          {businessData && <>
+            {/* Dataset Context */}
+            {businessData.dataset_intelligence && (
+              <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-3">
+                <div className="flex flex-wrap gap-4 text-xs">
+                  <span className="text-zinc-500">Industry: <span className="text-zinc-200 font-medium">{businessData.dataset_intelligence.industry || "—"}</span></span>
+                  <span className="text-zinc-500">Domain: <span className="text-zinc-200 font-medium">{businessData.dataset_intelligence.dataset_type || "—"}</span></span>
+                  <span className="text-zinc-500">Target: <span className="text-blue-400 font-medium">{businessData.dataset_intelligence.target_variable || "—"}</span></span>
+                  <span className="text-zinc-500">KPIs detected: <span className="text-emerald-400 font-medium">{kpiSummary.total_detected || 0}</span></span>
+                  <span className="text-zinc-500">Charts recommended: <span className="text-amber-400 font-medium">{chartRecs.length}</span></span>
                 </div>
               </div>
-              <div className="mt-4 grid grid-cols-4 gap-4">
-                {[
-                  { label: "Completeness", value: health.completeness },
-                  { label: "Quality", value: health.quality },
-                  { label: "Consistency", value: health.consistency },
-                  { label: "Missing Data", value: health.missing_data },
-                ].map(m => (
-                  <div key={m.label}>
-                    <div className="flex justify-between text-xs text-zinc-500 mb-1">
-                      <span>{m.label}</span><span>{m.value}%</span>
-                    </div>
-                    <div className="h-1.5 overflow-hidden rounded-full bg-zinc-800">
-                      <div className={`h-full rounded-full transition-all ${
-                        m.value >= 80 ? "bg-emerald-500" : m.value >= 50 ? "bg-amber-500" : "bg-red-500"
-                      }`} style={{ width: `${m.value}%` }} />
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <p className="mt-3 text-xs text-zinc-500">{health.explanation}</p>
-            </div>
-          )}
+            )}
 
-          {/* SECTION 3: Smart KPI Cards */}
-          {kpisLoading ? (
-            <div className="h-24 animate-pulse rounded-xl bg-zinc-800/50" />
-          ) : kpis.length > 0 && (
-            <div>
-              <div className="flex items-center gap-2 mb-3">
-                <BarChart3 className="h-5 w-5 text-zinc-400" />
-                <h2 className="text-sm font-medium uppercase tracking-wider text-zinc-500">Smart KPI Cards</h2>
-              </div>
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                {kpis.map((kpi, i) => (
-                  <KPICard key={`${kpi.label}-${i}`} kpi={kpi} />
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Data Quality & Statistical Analysis */}
-          {qualityLoading ? (
-            <div className="h-24 animate-pulse rounded-xl bg-zinc-800/50" />
-          ) : qualityReport ? (
-            <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-5">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <AlertTriangle className="h-5 w-5 text-amber-400" />
-                  <h2 className="text-sm font-medium uppercase tracking-wider text-zinc-500">Data Quality & Reliability</h2>
+            {/* Executive KPI Cards */}
+            {kpis.length > 0 && (
+              <div>
+                <div className="flex items-center gap-2 mb-3">
+                  <BarChart3 className="h-5 w-5 text-zinc-400" />
+                  <h2 className="text-sm font-medium uppercase tracking-wider text-zinc-500">Key Performance Indicators</h2>
                 </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-xs text-zinc-500">Quality:</span>
-                  <span className={`text-lg font-bold ${(qualityReport as any)?.data_quality?.overall_score >= 80 ? "text-emerald-400" : (qualityReport as any)?.data_quality?.overall_score >= 60 ? "text-amber-400" : "text-red-400"}`}>
-                    {(qualityReport as any)?.data_quality?.overall_score || "—"}
-                    <span className="text-xs text-zinc-600">/100</span>
-                  </span>
-                  <span className="text-[10px] text-zinc-500">{(qualityReport as any)?.data_quality?.grade}</span>
-                  <span className="text-xs text-zinc-500 ml-2">Statistical:</span>
-                  <span className={`text-sm font-semibold ${(qualityReport as any)?.statistical_confidence?.score >= 80 ? "text-emerald-400" : (qualityReport as any)?.statistical_confidence?.score >= 60 ? "text-amber-400" : "text-red-400"}`}>
-                    {(qualityReport as any)?.statistical_confidence?.score || "—"}%
-                  </span>
-                </div>
-              </div>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div>
-                  <p className="text-[10px] uppercase tracking-wider text-zinc-600 mb-1">Key Issues</p>
-                  <ul className="space-y-0.5">
-                    {((qualityReport as any)?.data_quality?.issues || []).slice(0, 4).map((issue: any, i: number) => (
-                      <li key={i} className="flex gap-1.5 text-[11px] text-zinc-400">
-                        <span className={`mt-1 h-1.5 w-1.5 shrink-0 rounded-full ${issue.type === "missing" ? "bg-amber-500" : issue.type === "duplicates" ? "bg-red-500" : "bg-blue-500"}`} />
-                        {issue.column ? `${issue.column}: ` : ""}{issue.type.replace(/_/g, " ")} ({issue.count || issue.pct}{issue.count ? " records" : "%"})
-                      </li>
-                    ))}
-                    {((qualityReport as any)?.data_quality?.issues || []).length === 0 && <li className="text-xs text-zinc-600">No significant issues detected.</li>}
-                  </ul>
-                </div>
-                <div>
-                  <p className="text-[10px] uppercase tracking-wider text-zinc-600 mb-1">Suggested Fixes</p>
-                  <ul className="space-y-0.5">
-                    {((qualityReport as any)?.feature_engineering_suggestions || []).slice(0, 3).map((s: any, i: number) => (
-                      <li key={i} className="flex gap-1.5 text-[11px] text-zinc-400">
-                        <span className={`mt-1 h-1.5 w-1.5 shrink-0 rounded-full ${s.priority === "high" ? "bg-red-500" : s.priority === "medium" ? "bg-amber-500" : "bg-blue-500"}`} />
-                        {s.suggestion}
-                      </li>
-                    ))}
-                    {((qualityReport as any)?.feature_engineering_suggestions || []).length === 0 && <li className="text-xs text-zinc-600">None suggested.</li>}
-                  </ul>
-                </div>
-              </div>
-              <button onClick={() => setShowAdvancedStats(!showAdvancedStats)}
-                className="mt-3 flex items-center gap-1 text-[10px] text-zinc-500 hover:text-zinc-300">
-                {showAdvancedStats ? "▼" : "▶"} Advanced Statistical Analysis
-              </button>
-              {showAdvancedStats && (
-                <div className="mt-3 space-y-3 border-t border-zinc-800 pt-3">
-                  <div className="grid gap-3 sm:grid-cols-3">
-                    <div className="rounded-lg bg-zinc-800/30 p-3">
-                      <p className="text-[10px] text-zinc-500">Normality Test</p>
-                      <p className="text-xs text-zinc-300 mt-1">
-                        {Object.values((qualityReport as any)?.normality || {}).filter((v: any) => v?.is_normal === true).length} normal / {Object.keys((qualityReport as any)?.normality || {}).length} columns
-                      </p>
-                    </div>
-                    <div className="rounded-lg bg-zinc-800/30 p-3">
-                      <p className="text-[10px] text-zinc-500">ANOVA Tests</p>
-                      <p className="text-xs text-zinc-300 mt-1">{((qualityReport as any)?.anova || []).length} tests run</p>
-                    </div>
-                    <div className="rounded-lg bg-zinc-800/30 p-3">
-                      <p className="text-[10px] text-zinc-500">PCA Components</p>
-                      <p className="text-xs text-zinc-300 mt-1">{(qualityReport as any)?.pca?.total_components || "N/A"} components</p>
-                    </div>
-                  </div>
-                  {((qualityReport as any)?.anova || []).length > 0 && (
-                    <div>
-                      <p className="text-[10px] font-medium text-zinc-500 mb-1">Significant ANOVA Results</p>
-                      <ul className="space-y-0.5">
-                        {((qualityReport as any)?.anova || []).filter((a: any) => a.significant).slice(0, 3).map((a: any, i: number) => (
-                          <li key={i} className="text-[11px] text-zinc-400">• {a.interpretation} (F={a.statistic}, p={a.p_value})</li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                  {((qualityReport as any)?.pca?.explained_variance_ratio || []).length > 0 && (
-                    <div>
-                      <p className="text-[10px] font-medium text-zinc-500 mb-1">PCA Variance Explained</p>
-                      <div className="flex gap-2">
-                        {((qualityReport as any)?.pca?.explained_variance_ratio || []).map((v: number, i: number) => (
-                          <div key={i} className="flex-1 bg-zinc-800 rounded-full h-2 overflow-hidden">
-                            <div className="h-full rounded-full bg-blue-500" style={{ width: `${v * 100}%` }} />
-                          </div>
-                        ))}
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                  {kpis.map((kpi: any, i: number) => (
+                    <div key={i} className={`rounded-xl border p-4 ${kpi.category === "Finance" ? "border-emerald-800/30 bg-emerald-950/20" : kpi.category === "Sales" ? "border-blue-800/30 bg-blue-950/20" : kpi.category === "HR" ? "border-purple-800/30 bg-purple-950/20" : "border-zinc-800 bg-zinc-900/50"}`}>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[10px] font-medium uppercase tracking-wider opacity-70">{kpi.category}</span>
+                        <DollarSign className="h-4 w-4 text-zinc-500" />
                       </div>
-                      <p className="text-[10px] text-zinc-600 mt-1">{(qualityReport as any)?.pca?.components_for_80pct} component(s) explain 80% variance</p>
+                      <p className="text-xs text-zinc-500">{kpi.label}</p>
+                      <p className="mt-1 text-xl font-semibold text-zinc-100">{kpi.value}</p>
+                      {kpi.change !== null && (
+                        <div className={`mt-1 flex items-center gap-1 text-xs ${kpi.change >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+                          {kpi.change >= 0 ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
+                          {Math.abs(kpi.change).toFixed(1)}%
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
-              )}
-            </div>
-          ) : (
-            <button onClick={runQualityAnalysis} className="flex items-center gap-2 rounded-xl border border-zinc-800 bg-zinc-900/50 px-5 py-4 text-sm text-zinc-400 hover:bg-zinc-800/70 w-full">
-              <AlertTriangle className="h-5 w-5" />
-              Run Data Quality & Statistical Analysis
-            </button>
-          )}
-
-          {/* SECTION 4: AURA Intelligence — manual trigger */}
-          {insightsLoading ? (
-            <div className="h-48 animate-pulse rounded-xl bg-zinc-800/50" />
-          ) : insights ? (
-            <div className="rounded-xl border border-blue-900/30 bg-blue-950/20 p-5">
-              <div className="flex items-center gap-2 mb-4">
-                <Brain className="h-5 w-5 text-blue-400" />
-                <h2 className="text-sm font-medium uppercase tracking-wider text-blue-400">AURA Intelligence</h2>
-                <span className="ml-auto rounded-full bg-blue-950 px-2 py-0.5 text-xs text-blue-400">
-                  {insights.confidence_score}% confidence
-                </span>
-              </div>
-              <p className="mb-4 text-sm leading-relaxed text-zinc-200">{insights.executive_summary}</p>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <InsightCard icon={Lightbulb} title="Key Findings" items={insights.key_findings} color="emerald" />
-                <InsightCard icon={AlertTriangle} title="Risks" items={insights.risks} color="red" />
-                <InsightCard icon={Target} title="Opportunities" items={insights.opportunities} color="blue" />
-                <InsightCard icon={Flag} title="Recommendations" items={insights.recommendations} color="purple" />
-              </div>
-            </div>
-          ) : (
-            <button onClick={analyzeInsights} className="flex items-center gap-2 rounded-xl border border-blue-900/30 bg-blue-950/20 px-5 py-4 text-sm text-blue-400 hover:bg-blue-950/40 w-full">
-              <Brain className="h-5 w-5" />
-              Analyze Intelligence (Findings, Risks, Opportunities)
-            </button>
-          )}
-
-          {/* Basic KPI Cards (Rows, Columns, etc) */}
-          {analytics && (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-              {[
-                { label: "Rows", value: analytics.row_count, icon: Table, color: "text-blue-400", bg: "bg-blue-600/10" },
-                { label: "Columns", value: analytics.column_count, icon: Hash, color: "text-emerald-400", bg: "bg-emerald-600/10" },
-                { label: "Missing", value: missingTotal, icon: AlertTriangle, color: "text-amber-400", bg: "bg-amber-600/10" },
-                { label: "Numeric", value: numericCount, icon: BarChart3, color: "text-purple-400", bg: "bg-purple-600/10" },
-                { label: "Categories", value: catCount, icon: Layers, color: "text-cyan-400", bg: "bg-cyan-600/10" },
-              ].map(k => (
-                <div key={k.label} className={`rounded-xl border border-zinc-800 ${k.bg} p-4`}>
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-medium uppercase tracking-wider text-zinc-500">{k.label}</span>
-                    <k.icon className={`h-4 w-4 ${k.color}`} />
-                  </div>
-                  <p className={`mt-2 text-2xl font-semibold ${k.color}`}>{k.value}</p>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Column table */}
-          {analytics && (
-            <div className="overflow-x-auto rounded-xl border border-zinc-800">
-              <table className="w-full text-left text-sm">
-                <thead><tr className="border-b border-zinc-800 bg-zinc-900/70">
-                  {["Name","Type","Total","Missing","Mean","Unique","Top"].map(h => (
-                    <th key={h} className="px-4 py-3 font-medium text-zinc-400">{h}</th>
                   ))}
-                </tr></thead>
-                <tbody>
-                  {analytics.columns.map(col => (
-                    <tr key={col.name} className="border-b border-zinc-800/50 hover:bg-zinc-900/30">
-                      <td className="px-4 py-3 font-medium">{col.name}</td>
-                      <td className="px-4 py-3 text-zinc-400">{col.dtype}</td>
-                      <td className="px-4 py-3">{col.total}</td>
-                      <td className="px-4 py-3">{col.missing > 0 ? <span className="text-amber-400">{col.missing}</span> : col.missing}</td>
-                      <td className="px-4 py-3">{col.numeric ? col.numeric.mean : "—"}</td>
-                      <td className="px-4 py-3">{col.categorical ? (col.categorical.unique as number) : "—"}</td>
-                      <td className="px-4 py-3 text-zinc-400">
-                        {col.categorical ? ((col.categorical.top_values as {value:string}[])?.slice(0,2).map(t=>t.value).join(", ")) : "—"}
-                      </td>
-                    </tr>
+                </div>
+              </div>
+            )}
+
+            {/* Chart Recommendations + Trend Analysis */}
+            <div className="grid gap-6 lg:grid-cols-2">
+              {/* Recommended Charts */}
+              <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-5">
+                <h2 className="text-xs font-medium uppercase tracking-wider text-zinc-500 mb-3">Recommended Visualizations</h2>
+                <div className="space-y-1.5">
+                  {chartRecs.filter((c: any) => c.chart_type !== "metric").slice(0, 8).map((rec: any, i: number) => (
+                    <div key={i} className="flex items-center gap-2 rounded-lg bg-zinc-800/30 px-3 py-2">
+                      <span className={`text-[10px] font-medium uppercase px-1.5 py-0.5 rounded ${
+                        rec.chart_type === "line" ? "bg-blue-900/50 text-blue-300" :
+                        rec.chart_type === "bar" ? "bg-emerald-900/50 text-emerald-300" :
+                        rec.chart_type === "pie" ? "bg-purple-900/50 text-purple-300" :
+                        rec.chart_type === "histogram" ? "bg-amber-900/50 text-amber-300" : "bg-zinc-800 text-zinc-400"
+                      }`}>{rec.chart_type}</span>
+                      <span className="text-xs text-zinc-200 flex-1">{rec.column}</span>
+                      <span className="text-[10px] text-zinc-500">{rec.classification}</span>
+                    </div>
                   ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+                  {chartRecs.length === 0 && <p className="text-xs text-zinc-600 py-4 text-center">No chart recommendations — check column types.</p>}
+                </div>
+              </div>
 
-          {/* SECTION 5: Visualizations — Smart Charts */}
-          {chartsLoading ? (
-            <div className="h-64 animate-pulse rounded-xl bg-zinc-800/50" />
-          ) : charts && (
-            <div>
-              <div className="mb-3 flex items-center gap-2">
-                <BarChart3 className="h-5 w-5 text-zinc-400" />
-                <h2 className="text-sm font-medium uppercase tracking-wider text-zinc-500">Key Business Drivers</h2>
-                {charts.target_variable && (
-                  <span className="text-xs text-zinc-600">Target: {charts.target_variable}</span>
-                )}
-              </div>
-              <div className="grid gap-4 sm:grid-cols-2">
-                {(charts.charts || []).map((chart: { column: string; chart_type: string; html: string; nunique: number }, i: number) => (
-                  <div key={i} className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-3">
-                    <h3 className="mb-1 text-xs font-medium uppercase tracking-wider text-zinc-500 flex items-center gap-1.5">
-                      <BarChart3 className="h-3.5 w-3.5" />
-                      {chart.column}
-                      <span className="text-[10px] text-zinc-600 font-normal lowercase">({chart.chart_type})</span>
-                    </h3>
-                    <iframe srcDoc={chart.html} className="w-full h-64 rounded-lg border-0" title={chart.column} />
+              {/* Trend Analysis */}
+              {Object.keys(trend).length > 0 && (
+                <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-5">
+                  <h2 className="text-xs font-medium uppercase tracking-wider text-zinc-500 mb-3">Trend Analysis</h2>
+                  <div className="space-y-2">
+                    {Object.entries(trend).map(([col, t]: [string, any]) => (
+                      <div key={col} className="rounded-lg bg-zinc-800/30 p-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-medium text-zinc-200">{col}</span>
+                          <span className={`text-xs font-semibold ${t.direction === "up" ? "text-emerald-400" : t.direction === "down" ? "text-red-400" : "text-zinc-400"}`}>
+                            {t.direction === "up" ? "↑" : t.direction === "down" ? "↓" : "→"} {t.change_pct > 0 ? "+" : ""}{t.change_pct}%
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-3 mt-1 text-[10px] text-zinc-500">
+                          <span>Current: {t.current}</span>
+                          <span>Avg: {t.average}</span>
+                        </div>
+                        <div className="mt-1.5 h-1.5 rounded-full bg-zinc-800 overflow-hidden">
+                          <div className={`h-full rounded-full ${t.direction === "up" ? "bg-emerald-500" : t.direction === "down" ? "bg-red-500" : "bg-zinc-600"}`}
+                            style={{ width: `${Math.min(Math.abs(t.change_pct) * 3, 100)}%` }} />
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                ))}
-                {(!charts.charts || charts.charts.length === 0) && (
-                  <p className="text-xs text-zinc-600 col-span-2 text-center py-8">No meaningful charts to display for this dataset.</p>
-                )}
-              </div>
-              {(charts.correlation as { html?: string } | null)?.html && (
-                <div className="mt-4 rounded-xl border border-zinc-800 bg-zinc-900/50 p-3">
-                  <h3 className="mb-1 text-xs font-medium uppercase tracking-wider text-zinc-500">Correlation Heatmap</h3>
-                  <iframe srcDoc={(charts.correlation as { html?: string }).html || ""} className="w-full h-80 rounded-lg border-0" title="Correlation" />
                 </div>
               )}
             </div>
-          )}
 
-          {/* SECTION 6: Chart Insight Cards — manual trigger */}
-          {chartInsightsLoading ? (
-            <div className="h-32 animate-pulse rounded-xl bg-zinc-800/50" />
-          ) : Object.keys(chartInsights).length > 0 ? (
-            <div>
-              <div className="mb-3 flex items-center gap-2">
-                <LineChart className="h-5 w-5 text-zinc-400" />
-                <h2 className="text-sm font-medium uppercase tracking-wider text-zinc-500">Chart Insight Cards</h2>
-              </div>
-              <div className="grid gap-4 sm:grid-cols-2">
-                  {Object.entries(chartInsights).map(([column, insight]) => (
-                  <div key={column} className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-4">
-                    <div className="flex items-center gap-2 mb-2">
-                      <BarChart3 className="h-4 w-4 text-zinc-400" />
-                      <h3 className="text-xs font-medium uppercase tracking-wider text-zinc-500">
-                        {column} Insight
-                      </h3>
+            {/* Comparative Analysis */}
+            {comparative.length > 0 && (
+              <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-5">
+                <div className="flex items-center gap-2 mb-3">
+                  <Target className="h-5 w-5 text-orange-400" />
+                  <h2 className="text-sm font-medium uppercase tracking-wider text-zinc-500">Comparative Analysis</h2>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {comparative.map((c: any, i: number) => (
+                    <div key={i} className="rounded-lg bg-zinc-800/30 p-3">
+                      <p className="text-xs text-zinc-400">{c.kpi} <span className="text-zinc-600">by</span> {c.segment}</p>
+                      <div className="mt-2 flex items-center gap-3">
+                        <div className="flex-1">
+                          <p className="text-[10px] text-emerald-400">Best: {c.top_segment}</p>
+                          <p className="text-xs font-semibold text-zinc-200">{c.top_value.toFixed(2)}</p>
+                        </div>
+                        <div className="flex-1">
+                          <p className="text-[10px] text-red-400">Worst: {c.bottom_segment}</p>
+                          <p className="text-xs font-semibold text-zinc-200">{c.bottom_value.toFixed(2)}</p>
+                        </div>
+                      </div>
                     </div>
-                    <p className="text-xs leading-relaxed text-zinc-300">{insight}</p>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
-            </div>
-          ) : charts && (
-            <button onClick={analyzeChartInsights} disabled={!charts} className="flex items-center gap-2 rounded-xl border border-zinc-800 bg-zinc-900/50 px-5 py-4 text-sm text-zinc-400 hover:bg-zinc-800/70 w-full disabled:opacity-30">
-              <LineChart className="h-5 w-5" />
-              Generate Chart Insights
-            </button>
-          )}
+            )}
 
-          {/* SECTION 7: Analytics Assistant */}
-          <div className="rounded-xl border border-zinc-800 bg-zinc-900/40">
-            <div className="flex items-center gap-2 border-b border-zinc-800 px-5 py-3">
-              <MessageSquare className="h-4 w-4 text-zinc-400" />
-              <h2 className="text-sm font-medium uppercase tracking-wider text-zinc-500">Analytics Assistant</h2>
-              <span className="ml-auto text-xs text-zinc-600">Ask about this dataset</span>
-            </div>
-            <div className="h-64 space-y-3 overflow-y-auto p-4">
-              {chatMessages.length === 0 && !chatLoading && (
-                <div className="flex h-full items-center justify-center">
-                  <div className="text-center">
-                    <Bot className="mx-auto mb-2 h-8 w-8 text-zinc-700" />
-                    <p className="text-sm text-zinc-600">Ask AURA about this dataset...</p>
-                    <div className="mt-3 flex flex-wrap justify-center gap-2">
-                      {[
-                        "What are the biggest risks?",
-                        "What trends do you see?",
-                        "What should management do?",
-                        "Which department performs best?",
-                      ].map(q => (
-                        <button key={q} onClick={() => { setChatInput(q); }}
-                          className="rounded-full border border-zinc-800 px-3 py-1 text-xs text-zinc-500 hover:border-zinc-600">
-                          {q}
-                        </button>
-                      ))}
+            {/* Strong Correlations */}
+            {correlations.length > 0 && (
+              <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-5">
+                <div className="flex items-center gap-2 mb-3">
+                  <Activity className="h-5 w-5 text-violet-400" />
+                  <h2 className="text-sm font-medium uppercase tracking-wider text-zinc-500">Key Relationships</h2>
+                </div>
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                  {correlations.map((c: any, i: number) => (
+                    <div key={i} className="rounded-lg bg-zinc-800/30 px-3 py-2 text-xs">
+                      <span className="text-zinc-300">{c.col_a}</span>
+                      <span className={`mx-1 ${c.correlation > 0 ? "text-emerald-400" : "text-red-400"}`}>
+                        {c.correlation > 0 ? "+" : ""}{c.correlation}
+                      </span>
+                      <span className="text-zinc-300">{c.col_b}</span>
+                      <span className="ml-1 text-[10px] text-zinc-600">({c.strength})</span>
                     </div>
-                  </div>
+                  ))}
                 </div>
-              )}
-              {chatMessages.map((m, i) => (
-                <div key={i} className={`flex gap-2 ${m.role === "user" ? "justify-end" : ""}`}>
-                  {m.role === "assistant" && <Bot className="mt-1 h-6 w-6 shrink-0 text-blue-400" />}
-                  <div className={`max-w-[80%] rounded-xl px-3 py-2 text-sm ${
-                    m.role === "user" ? "bg-blue-600 text-white" : "bg-zinc-800 text-zinc-200"
-                  }`}>{m.content}</div>
-                  {m.role === "user" && <User className="mt-1 h-6 w-6 shrink-0 text-zinc-500" />}
+              </div>
+            )}
+
+            {/* Category breakdown */}
+            {kpiSummary.by_category && Object.keys(kpiSummary.by_category).length > 0 && (
+              <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-5">
+                <h2 className="text-xs font-medium uppercase tracking-wider text-zinc-500 mb-3">KPI Breakdown by Category</h2>
+                <div className="flex flex-wrap gap-2">
+                  {Object.entries(kpiSummary.by_category).map(([cat, count]: [string, any]) => (
+                    <div key={cat} className="rounded-lg bg-zinc-800/30 px-3 py-2 text-xs">
+                      <span className="text-zinc-400">{cat}: </span>
+                      <span className="text-zinc-200 font-semibold">{count} KPIs</span>
+                    </div>
+                  ))}
                 </div>
-              ))}
-              {chatLoading && (
-                <div className="flex gap-2">
-                  <Bot className="mt-1 h-6 w-6 shrink-0 text-blue-400" />
-                  <div className="rounded-xl bg-zinc-800 px-3 py-2 text-sm text-zinc-400"><span className="animate-pulse">Thinking...</span></div>
-                </div>
-              )}
-              <div ref={chatBottom} />
-            </div>
-            <div className="flex gap-2 border-t border-zinc-800 p-3">
-              <input value={chatInput} onChange={e => setChatInput(e.target.value)}
-                onKeyDown={e => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), sendChat())}
-                placeholder="Ask about this dataset..." className="flex-1 rounded-lg border border-zinc-800 bg-zinc-900/70 px-3 py-2 text-sm text-zinc-100 placeholder-zinc-600 outline-none focus:border-blue-600" />
-              <button onClick={sendChat} disabled={!chatInput.trim() || chatLoading}
-                className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-30">
-                <Send className="h-4 w-4" />
-              </button>
-            </div>
-          </div>
+              </div>
+            )}
+          </>}
         </div>
       )}
     </div>
   );
 }
-
-function KPICard({ kpi }: { kpi: KPIItem }) {
-  const colorMap: Record<string, string> = {
-    Finance: "text-emerald-400 bg-emerald-600/10 border-emerald-800/30",
-    Sales: "text-blue-400 bg-blue-600/10 border-blue-800/30",
-    HR: "text-purple-400 bg-purple-600/10 border-purple-800/30",
-    Operations: "text-amber-400 bg-amber-600/10 border-amber-800/30",
-  };
-  const iconMap: Record<string, React.ElementType> = {
-    Finance: DollarSign,
-    Sales: ShoppingCart,
-    HR: Users,
-    Operations: Clock,
-  };
-  const Icon = iconMap[kpi.category] || BarChart3;
-  const colorClass = colorMap[kpi.category] || "text-zinc-400 bg-zinc-600/10 border-zinc-800/30";
-
-  return (
-    <div className={`rounded-xl border p-4 ${colorClass}`}>
-      <div className="flex items-center justify-between mb-1">
-        <span className="text-xs font-medium uppercase tracking-wider opacity-70">{kpi.category}</span>
-        <Icon className="h-4 w-4" />
-      </div>
-      <p className="text-xs text-zinc-500">{kpi.label}</p>
-      <p className="mt-1 text-xl font-semibold">{kpi.value}</p>
-      {kpi.change !== null && (
-        <div className={`mt-1 flex items-center gap-1 text-xs ${
-          kpi.change >= 0 ? "text-emerald-400" : "text-red-400"
-        }`}>
-          {kpi.change >= 0 ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
-          {Math.abs(kpi.change).toFixed(1)}%
-        </div>
-      )}
-    </div>
-  );
-}
-
-function InsightCard({ icon: Icon, title, items, color }: { icon: React.ElementType; title: string; items: string[]; color: string }) {
-  const colors: Record<string, string> = { emerald: "text-emerald-400 border-emerald-800/30 bg-emerald-950/20", red: "text-red-400 border-red-800/30 bg-red-950/20", blue: "text-blue-400 border-blue-800/30 bg-blue-950/20", purple: "text-purple-400 border-purple-800/30 bg-purple-950/20" };
-  const dotColors: Record<string, string> = { emerald: "bg-emerald-500", red: "bg-red-500", blue: "bg-blue-500", purple: "bg-purple-500" };
-  if (!items.length) return null;
-  return (
-    <div className={`rounded-lg border p-3 ${colors[color] || ""}`}>
-      <div className="mb-2 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wider">
-        <Icon className="h-3.5 w-3.5" />{title}
-      </div>
-      <ul className="space-y-1">
-        {items.map((item, i) => (
-          <li key={i} className="flex gap-2 text-xs">
-            <span className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${dotColors[color] || "bg-zinc-500"}`} />
-            {item}
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
-function HeatmapFrame({ data }: { data: Record<string, unknown> }) {
-  const trace = (data.data as Record<string, unknown>[])?.[0];
-  const z = trace?.z as number[][];
-  const x = trace?.x as string[];
-  const y = trace?.y as string[];
-  if (!z?.length) return <div className="h-32 rounded-lg bg-zinc-900/70" />;
-  return (
-    <div className="overflow-x-auto">
-      <table className="mx-auto text-xs">
-        <thead><tr>
-          <th />
-          {x?.map(h => <th key={h} className="px-2 py-1 text-zinc-500">{h}</th>)}
-        </tr></thead>
-        <tbody>
-          {z.map((row, i) => (
-            <tr key={i}>
-              <td className="pr-2 text-zinc-500">{y?.[i]}</td>
-              {row.map((v, j) => (
-                <td key={j} className="px-2 py-1 text-center font-medium"
-                  style={{ backgroundColor: v >= 0.7 ? "#ef553b" : v >= 0.4 ? "#fdae61" : v >= 0.1 ? "#e0f3f8" : "#abd9e9",
-                           color: v >= 0.4 ? "white" : "black" }}>
-                  {v.toFixed(2)}
-                </td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function CorrelationFrame({ data }: { data: Record<string, unknown> }) {
-  return <HeatmapFrame data={data} />;
-}
-
