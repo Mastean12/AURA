@@ -21,6 +21,7 @@ async def explain_model(payload: ExplainRequest):
     from app.services.data_quality_service import run_data_quality_audit
     from app.services.intelligent_prediction_engine import detect_problem
     from app.services.dataset_intelligence_service import analyze_dataset
+    from app.services.column_intelligence_service import filter_feature_columns
     from sqlalchemy import select
 
     # Run AutoML to get the best model
@@ -50,7 +51,7 @@ async def explain_model(payload: ExplainRequest):
 
     # Retrain best model for explainability
     X = df.drop(columns=[target]).select_dtypes(include=["number"])
-    X = X.loc[:, X.nunique() > 1]
+    X = filter_feature_columns(X)
     y = df[target]
 
     if payload.problem_type == "classification" and y.dtype in ("float64", "object"):

@@ -5,76 +5,12 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from app.services.data_quality_service import run_data_quality_audit
+import scipy.cluster.hierarchy as sch
+from scipy.stats import pearsonr
+from sklearn.decomposition import PCA
+from sklearn.preprocessing import StandardScaler
 
-logger = logging.getLogger(__name__)
-
-
-def _safe_stat(col_data: pd.Series, func, default=0.0):
-    try:
-        return float(func(col_data))
-    except Exception:
-        return default
-
-
-def compute_normality(col_data: pd.Series) -> dict:
-    """Shapiro-Wilk inspired normality test using skewness and kurtosis."""
-    n = len(col_data)
-    if n < 8:
-        return {"is_normal": None, "p_value": None, "reason": "Insufficient sample size (< 8)"}
-    skew = _safe_stat(col_data, lambda x: x.skew())
-    kurt = _safe_stat(col_data, lambda x: x.kurtosis())
-    # If skewness is between -2 and 2 and kurtosis between -7 and 7, roughly normal
-    is_normal = bool(abs(skew) < 2 and abs(kurt) < 7)
-    return {"is_normal": is_normal, "skewness": round(float(skew), 3), "kurtosis": round(float(kurt), 3),
-            "reason": "Approximately normal" if is_normal else "Non-normal distribution detected"}
-
-
-def compute_confidence_interval(col_data: pd.Series, confidence: float = 0.95) -> dict:
-    """Compute confidence interval for the mean."""
-    n = len(col_data)
-    if n < 2:
-        return {"lower": None, "upper": None, "mean": None, "margin": None}
-    from scipy.stats import t
-    mean = float(col_data.mean())
-    se = float(col_data.std() / float(np.sqrt(n)))
-    alpha = 1.0 - confidence
-    t_crit = float(t.ppf(1.0 - alpha / 2.0, n - 1))
-    margin = float(t_crit * se)
-    return {"lower": round(mean - margin, 4), "upper": round(mean + margin, 4),
-            "mean": round(mean, 4), "margin": round(margin, 4), "confidence": float(confidence)}
-
-
-def compute_anova(df: pd.DataFrame, numeric_col: str, cat_col: str) -> dict:
-    """One-way ANOVA: test if a numeric column differs across categories."""
-    from scipy.stats import f_oneway
-    groups = [g.dropna().values for _, g in df.groupby(cat_col)[numeric_col] if len(g.dropna()) >= 5]
-    if len(groups) < 2:
-        return {"test": "ANOVA", "statistic": None, "p_value": None, "reason": "Need 2+ groups with 5+ samples"}
-    try:
-        f_stat, p_val = f_oneway(*groups)
-        sig = bool(p_val < 0.05)
-        return {"test": "ANOVA", "statistic": round(float(f_stat), 4), "p_value": round(float(p_val), 6),
-                "significant": sig, "groups": len(groups),
-                "interpretation": f"Numeric column '{numeric_col}' differs significantly across '{cat_col}' categories" if sig else f"No significant difference in '{numeric_col}' across '{cat_col}'"}
-    except Exception as e:
-        return {"test": "ANOVA", "error": str(e)}
-
-
-def compute_chi_square(df: pd.DataFrame, col_a: str, col_b: str) -> dict:
-    """Chi-square test of independence between two categorical columns."""
-    from scipy.stats import chi2_contingency
-    ct = pd.crosstab(df[col_a], df[col_b])
-    if ct.size == 0:
-        return {"test": "Chi-Square", "statistic": None, "p_value": None, "reason": "Empty contingency table"}
-    try:
-        chi2, p_val, dof, expected = chi2_contingency(ct)
-        sig = bool(p_val < 0.05)
-        return {"test": "Chi-Square", "statistic": round(float(chi2), 4), "p_value": round(float(p_val), 6),
-                "dof": int(dof), "significant": sig,
-                "interpretation": f"'{col_a}' and '{col_b}' are significantly related" if sig else f"No significant relationship between '{col_a}' and '{col_b}'"}
-    except Exception as e:
-        return {"test": "Chi-Square", "error": str(e)}
+from app.services.column_intelligence_service import filter_feature_columns
 
 
 def compute_pca(df: pd.DataFrame, n_components: int = 3) -> dict:
@@ -82,6 +18,7 @@ def compute_pca(df: pd.DataFrame, n_components: int = 3) -> dict:
     from sklearn.decomposition import PCA
     from sklearn.preprocessing import StandardScaler
     numeric = df.select_dtypes(include=["number"]).dropna(how="all", axis=1).dropna()
+    numeric = filter_feature_columns(numeric)
     if numeric.shape[1] < 3 or numeric.shape[0] < 10:
         return {"error": "Need 3+ numeric columns and 10+ rows for PCA"}
     cols = numeric.columns[:min(15, numeric.shape[1])].tolist()

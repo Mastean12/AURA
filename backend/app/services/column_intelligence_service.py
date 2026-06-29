@@ -11,6 +11,16 @@ logger = logging.getLogger(__name__)
 IDENTIFIER_PATTERNS = re.compile(
     r"^(id|.*_id|.*id$|code|key|uuid|ref|reference|account.*num|phone|fax|email)", re.I
 )
+
+def is_identifier_column(name: str) -> bool:
+    return bool(IDENTIFIER_PATTERNS.match(name))
+
+def filter_feature_columns(X: pd.DataFrame) -> pd.DataFrame:
+    """Remove identifier columns by name pattern and constant columns from feature matrix."""
+    keep = ~X.columns.to_series().apply(lambda c: bool(IDENTIFIER_PATTERNS.match(c)))
+    X = X.loc[:, keep]
+    X = X.loc[:, X.nunique() > 1]
+    return X
 TIME_PATTERNS = re.compile(
     r"^(date|time|timestamp|year|month|day|quarter|period|created_at|updated_at|datetime)", re.I
 )

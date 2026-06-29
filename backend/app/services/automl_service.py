@@ -6,6 +6,8 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
+from app.services.column_intelligence_service import filter_feature_columns
+
 logger = logging.getLogger(__name__)
 
 CLASSIFIERS = {}
@@ -109,7 +111,7 @@ def _get_feature_target(df: pd.DataFrame, target: str):
     """Split dataframe into features and target."""
     y = df[target]
     X = df.drop(columns=[target]).select_dtypes(include=["number"])
-    X = X.loc[:, X.nunique() > 1]
+    X = filter_feature_columns(X)
     return X, y
 
 
@@ -142,12 +144,14 @@ async def run_automl(doc_id: int, problem_type: str = "", target: str = "") -> d
 
     if problem_type == "clustering":
         X = df.select_dtypes(include=["number"]).dropna()
+        X = filter_feature_columns(X)
         if X.shape[1] < 2:
             return {"error": "Need 2+ numeric columns for clustering"}
         return _run_clustering(X, df)
 
     if problem_type == "anomaly_detection":
         X = df.select_dtypes(include=["number"]).dropna()
+        X = filter_feature_columns(X)
         if X.shape[1] < 1:
             return {"error": "Need numeric columns for anomaly detection"}
         return _run_anomaly_detection(X)

@@ -9,6 +9,7 @@ import pandas as pd
 from app.services.business_analytics_engine_v2 import get_business_analytics
 from app.services.data_quality_service import run_data_quality_audit
 from app.services.ai_service import generate_response_async
+from app.services.column_intelligence_service import filter_feature_columns
 
 logger = logging.getLogger(__name__)
 
@@ -451,7 +452,7 @@ async def _build_analyst_from_predictive_pipeline(doc_id: int, df: pd.DataFrame)
         return {}
 
     X = df.drop(columns=[target]).select_dtypes(include=["number"])
-    X = X.loc[:, X.nunique() > 1]
+    X = filter_feature_columns(X)
     if X.shape[1] < 1:
         return {}
     y = df[target]

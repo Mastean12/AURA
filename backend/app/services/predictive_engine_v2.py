@@ -4,6 +4,8 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
+from app.services.column_intelligence_service import filter_feature_columns
+
 logger = logging.getLogger(__name__)
 
 # ──────────────────────────────────────────────
@@ -118,6 +120,7 @@ def engineer_features(df: pd.DataFrame, target: str, problem_type: dict) -> pd.D
     df = df.copy()
     if target in df.columns:
         df = df.drop(columns=[target])
+    df = filter_feature_columns(df)
 
     result = df.copy()
 
@@ -186,10 +189,9 @@ def _train_test_split(df: pd.DataFrame, target: str, test_size: float = 0.2):
     from sklearn.model_selection import train_test_split
     y = df[target]
     X = df.drop(columns=[target])
-    # Drop non-numeric columns
+    # Drop non-numeric, identifier, and constant columns
     X = X.select_dtypes(include=["number"])
-    # Drop constant columns
-    X = X.loc[:, X.nunique() > 1]
+    X = filter_feature_columns(X)
     if X.empty or y.nunique() == 0:
         return None, None, None, None
     return train_test_split(X, y, test_size=test_size, random_state=42)
@@ -424,7 +426,7 @@ async def run_predictive_analysis(doc_id: int, df: pd.DataFrame, dq_score: float
 
     df_model = pd.concat([df_fe, y_encoded], axis=1)
     # Drop non-numeric feature columns only (keep target)
-    numeric_features = df_fe.select_dtypes(include=["number"]).columns
+    numeric_features = filter_feature_columns(df_fe.select_dtypes(include=["number"])).columns
     df_model = pd.concat([df_model[numeric_features], y_encoded], axis=1).dropna(how="all", axis=1)
     df_model = df_model.dropna(subset=[target])
 
@@ -444,7 +446,7 @@ async def run_predictive_analysis(doc_id: int, df: pd.DataFrame, dq_score: float
     best_model = None
     feature_names = [c for c in df_fe.columns if c in df_model.columns and c != target]
     X_full = df_model[feature_names].select_dtypes(include=["number"])
-    X_full = X_full.loc[:, X_full.nunique() > 1]
+    X_full = filter_feature_columns(X_full)
 
     if best_model_name and X_full.shape[1] > 0:
         from sklearn.model_selection import train_test_split

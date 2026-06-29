@@ -29,6 +29,7 @@ async def executive_decision_intelligence(payload: DecisionRequest):
     from app.services.executive_decision_intelligence_service import run_executive_decision_intelligence
     from app.services.data_quality_service import run_data_quality_audit
     from app.services.dataset_intelligence_service import analyze_dataset
+    from app.services.column_intelligence_service import filter_feature_columns
     from sqlalchemy import select
 
     # Run AutoML to get best model + metrics
@@ -58,7 +59,7 @@ async def executive_decision_intelligence(payload: DecisionRequest):
         raise HTTPException(status_code=400, detail="Could not determine target variable")
 
     X = df.drop(columns=[target]).select_dtypes(include=["number"])
-    X = X.loc[:, X.nunique() > 1]
+    X = filter_feature_columns(X)
     if X.shape[1] < 1:
         raise HTTPException(status_code=400, detail="No valid numeric features found")
     y = df[target]
