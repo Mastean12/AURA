@@ -27,6 +27,7 @@ from app.api.pipeline import router as pipeline_router
 from app.api.columns import router as columns_router
 from app.api.chart_recommend import router as chart_recommend_router
 from app.api.validation import router as validation_router
+from app.api.insights import router as insights_router
 from app.api.billing import router as billing_router
 from app.api.business_context import router as business_context_router
 
@@ -116,6 +117,7 @@ app.include_router(business_context_router, prefix="/api/v1")
 app.include_router(columns_router, prefix="/api/v1")
 app.include_router(chart_recommend_router, prefix="/api/v1")
 app.include_router(validation_router, prefix="/api/v1")
+app.include_router(insights_router, prefix="/api/v1")
 app.include_router(pipeline_router, prefix="/api/v1")
 
 
