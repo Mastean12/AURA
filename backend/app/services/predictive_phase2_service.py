@@ -21,6 +21,14 @@ INDUSTRY_KEYWORDS = {
     "SaaS": ["subscription", "trial", "conversion", "mrr", "arr", "churn", "usage", "seat"],
 }
 
+
+def _validate_pct(value: float, name: str = "") -> float:
+    """Clamp percentage to 0-100 and reject NaN/Inf."""
+    if np.isnan(value) or np.isinf(value):
+        logger.warning("Invalid %s value: %s, replacing with 0", name, value)
+        return 0.0
+    return max(0.0, min(100.0, round(float(value), 1)))
+
 # ──────────────────────────────────────────────────────
 # MODULE 1: Prediction Explanation Engine
 # ──────────────────────────────────────────────────────
@@ -28,17 +36,20 @@ INDUSTRY_KEYWORDS = {
 
 def _generate_nl_explanation(target: str, drivers: list[dict], n_positive: int, total: int, revenue_at_risk: float, confidence_pct: float, model_name: str) -> str:
     """Generate a natural-language business explanation of the prediction."""
-    pct = round(n_positive / total * 100, 1) if total else 0
+    raw_pct = round(n_positive / total * 100, 1) if total else 0
+    pct = _validate_pct(raw_pct, "explanation proportion")
     driver_strs = []
     for d in drivers[:3]:
-        driver_strs.append(f"{d['feature'].replace('_', ' ').title()} ({round(min(d['importance'], 1) * 100, 1)}%)")
+        val = _validate_pct(round(min(d['importance'], 1) * 100, 1), f"driver {d['feature']}")
+        driver_strs.append(f"{d['feature'].replace('_', ' ').title()} ({val}%)")
     driver_text = ", ".join(driver_strs)
     revenue_str = f"${revenue_at_risk:,.0f}" if revenue_at_risk else "significant revenue"
+    validated_conf = _validate_pct(confidence_pct, "explanation confidence")
     return (
         f"We identified {n_positive:,} records at high risk of {target} ({pct}% of {total:,}). "
         f"The strongest contributors are {driver_text}. "
         f"If no action is taken, the business could lose approximately {revenue_str} in {target}-related impact. "
-        f"This prediction has {confidence_pct}% confidence based on {model_name.replace('_', ' ')} analysis."
+        f"This prediction has {validated_conf}% confidence based on {model_name.replace('_', ' ')} analysis."
     )
 
 
@@ -227,12 +238,12 @@ def forecast_timeline(df: pd.DataFrame, target: str) -> dict:
 # ──────────────────────────────────────────────────────
 
 
-def segment_analysis(df: pd.DataFrame, target: str, importance: list[dict], revenue_at_risk: float = 0) -> list[dict]:
-    """Auto-detect high-risk segments from categorical columns."""
+def segment_analysis(df: pd.DataFrame, target: str, importance: list[dict],
+                     revenue_at_risk: float = 0, model=None, X_columns: list[str] | None = None) -> list[dict]:
+    """Compute segment risk using average predicted probability for each segment."""
     segments = []
     examined = set()
 
-    # Find a revenue-like column for per-segment revenue estimation
     revenue_col = None
     for col in df.select_dtypes(include=["number"]).columns:
         if col.lower() in ("revenue", "sales", "income", "totalcharges", "amount", "value"):
@@ -253,27 +264,47 @@ def segment_analysis(df: pd.DataFrame, target: str, importance: list[dict], reve
             med = df[col].median()
             high_subset = df[df[col] > med]
             low_subset = df[df[col] <= med]
-            if pd.api.types.is_numeric_dtype(df[target]):
-                high_risk = high_subset[target].mean() if len(high_subset) > 0 else 0
-                low_risk = low_subset[target].mean() if len(low_subset) > 0 else 0
+
+            if model is not None and X_columns is not None and len(X_columns) > 0:
+                X_high = high_subset[X_columns]
+                X_low = low_subset[X_columns]
+                if hasattr(model, "predict_proba"):
+                    proba_high = model.predict_proba(X_high)
+                    high_risk = float(np.mean(proba_high[:, 1])) if proba_high.shape[1] > 1 else float(np.mean(proba_high[:, 0]))
+                    proba_low = model.predict_proba(X_low)
+                    low_risk = float(np.mean(proba_low[:, 1])) if proba_low.shape[1] > 1 else float(np.mean(proba_low[:, 0]))
+                else:
+                    preds_high = model.predict(X_high)
+                    preds_low = model.predict(X_low)
+                    pred_max = max(np.max(preds_high), np.max(preds_low))
+                    pred_min = min(np.min(preds_high), np.min(preds_low))
+                    if pred_max > pred_min:
+                        high_risk = float((np.mean(preds_high) - pred_min) / (pred_max - pred_min))
+                        low_risk = float((np.mean(preds_low) - pred_min) / (pred_max - pred_min))
+                    else:
+                        high_risk = low_risk = 0.5
             else:
-                target_vals = df[target].astype("category").cat.codes
-                high_risk = target_vals[high_subset.index].mean() if len(high_subset) > 0 else 0
-                low_risk = target_vals[low_subset.index].mean() if len(low_subset) > 0 else 0
+                if pd.api.types.is_numeric_dtype(df[target]):
+                    high_risk = float(high_subset[target].mean()) if len(high_subset) > 0 else 0
+                    low_risk = float(low_subset[target].mean()) if len(low_subset) > 0 else 0
+                else:
+                    target_vals = df[target].astype("category").cat.codes
+                    high_risk = float(target_vals[high_subset.index].mean()) if len(high_subset) > 0 else 0
+                    low_risk = float(target_vals[low_subset.index].mean()) if len(low_subset) > 0 else 0
 
             col_name = col.replace("_", " ").title()
             high_rev = float(high_subset[revenue_col].sum()) if revenue_col and len(high_subset) > 0 else revenue_at_risk * 0.5
             low_rev = float(low_subset[revenue_col].sum()) if revenue_col and len(low_subset) > 0 else revenue_at_risk * 0.5
             segments.append({
                 "segment": f"High {col_name}",
-                "risk_score": round(min(float(high_risk * 100), 100), 1),
+                "risk_score": _validate_pct(float(high_risk * 100), f"High {col_name} risk"),
                 "type": "numeric_high",
                 "count": len(high_subset),
                 "revenue_impact": round(high_rev * high_risk, 2) if revenue_col else 0,
             })
             segments.append({
                 "segment": f"Low {col_name}",
-                "risk_score": round(min(float(low_risk * 100), 100), 1),
+                "risk_score": _validate_pct(float(low_risk * 100), f"Low {col_name} risk"),
                 "type": "numeric_low",
                 "count": len(low_subset),
                 "revenue_impact": round(low_rev * low_risk, 2) if revenue_col else 0,
@@ -284,14 +315,24 @@ def segment_analysis(df: pd.DataFrame, target: str, importance: list[dict], reve
                 subset = df[df[col] == cat]
                 if len(subset) < 5:
                     continue
-                if pd.api.types.is_numeric_dtype(df[target]):
-                    risk = subset[target].mean()
+                if model is not None and X_columns is not None and len(X_columns) > 0:
+                    X_subset = subset[X_columns]
+                    if hasattr(model, "predict_proba"):
+                        proba = model.predict_proba(X_subset)
+                        risk = float(np.mean(proba[:, 1])) if proba.shape[1] > 1 else float(np.mean(proba[:, 0]))
+                    else:
+                        preds = model.predict(X_subset)
+                        pred_max, pred_min = float(np.max(preds)), float(np.min(preds))
+                        risk = float((np.mean(preds) - pred_min) / (pred_max - pred_min)) if pred_max > pred_min else 0.5
                 else:
-                    risk = subset[target].astype("category").cat.codes.mean()
+                    if pd.api.types.is_numeric_dtype(df[target]):
+                        risk = float(subset[target].mean())
+                    else:
+                        risk = float(subset[target].astype("category").cat.codes.mean())
                 seg_rev = float(subset[revenue_col].sum()) if revenue_col and len(subset) > 0 else revenue_at_risk * (len(subset) / len(df))
                 segments.append({
                     "segment": f"{cat}",
-                    "risk_score": round(min(float(risk * 100), 100), 1),
+                    "risk_score": _validate_pct(float(risk * 100), f"{cat} risk"),
                     "type": "categorical",
                     "count": len(subset),
                     "revenue_impact": round(seg_rev * risk, 2),
@@ -306,13 +347,13 @@ def segment_analysis(df: pd.DataFrame, target: str, importance: list[dict], reve
 # ──────────────────────────────────────────────────────
 
 
-def simulate_scenario(df: pd.DataFrame, target: str, scenario_type: str, adjustment_pct: float) -> dict:
-    """Simulate what happens if a key feature changes by adjustment_pct."""
+def simulate_scenario(df: pd.DataFrame, target: str, scenario_type: str,
+                     adjustment_pct: float, model=None, X_columns: list[str] | None = None) -> dict:
+    """Rerun model predictions after modifying a key feature to simulate what-if scenarios."""
     numeric_cols = df.select_dtypes(include=["number"]).columns
     if len(numeric_cols) < 2:
         return {"error": "Need at least 2 numeric columns for simulation"}
 
-    # Find the best predictor (highest correlation with target)
     if pd.api.types.is_numeric_dtype(df[target]):
         corrs = df[numeric_cols].corr()[target].drop(target).abs().sort_values(ascending=False)
     else:
@@ -323,35 +364,57 @@ def simulate_scenario(df: pd.DataFrame, target: str, scenario_type: str, adjustm
         return {"error": "No correlated features found"}
 
     top_feature = corrs.index[0]
-    current_mean = df[top_feature].mean()
 
+    df_sim = df.copy()
     if scenario_type == "price_change":
-        df_sim = df.copy()
         df_sim[top_feature] = df_sim[top_feature] * (1 + adjustment_pct / 100)
     elif scenario_type == "retention_program":
-        df_sim = df.copy()
         df_sim[top_feature] = df_sim[top_feature] * (1 - adjustment_pct / 100)
     elif scenario_type == "budget_increase":
-        df_sim = df.copy()
         df_sim[top_feature] = df_sim[top_feature] * (1 + adjustment_pct / 100)
     elif scenario_type == "contract_changes":
-        df_sim = df.copy()
         df_sim[top_feature] = df_sim[top_feature] * (1 - adjustment_pct / 200)
     elif scenario_type == "staffing_changes":
-        df_sim = df.copy()
         df_sim[top_feature] = df_sim[top_feature] * (1 + adjustment_pct / 200)
     else:
         return {"error": f"Unknown scenario: {scenario_type}"}
 
-    current_outcome = df[target].mean() if pd.api.types.is_numeric_dtype(df[target]) else (df[target] == df[target].mode().iloc[0]).mean()
-    simulated_outcome = df_sim[target].mean() if pd.api.types.is_numeric_dtype(df[target]) else (df_sim[target] == df_sim[target].mode().iloc[0]).mean()
+    if model is not None and X_columns is not None and len(X_columns) > 0:
+        X_orig = df[X_columns]
+        X_sim = df_sim[X_columns]
+
+        if hasattr(model, "predict_proba"):
+            proba_orig = model.predict_proba(X_orig)
+            current_outcome = float(np.mean(proba_orig[:, 1])) if proba_orig.shape[1] > 1 else float(np.mean(proba_orig[:, 0]))
+            proba_sim = model.predict_proba(X_sim)
+            simulated_outcome = float(np.mean(proba_sim[:, 1])) if proba_sim.shape[1] > 1 else float(np.mean(proba_sim[:, 0]))
+        else:
+            preds_orig = model.predict(X_orig)
+            preds_sim = model.predict(X_sim)
+            pred_all = np.concatenate([preds_orig, preds_sim])
+            pred_min, pred_max = float(np.min(pred_all)), float(np.max(pred_all))
+            if pred_max > pred_min:
+                current_outcome = float((np.mean(preds_orig) - pred_min) / (pred_max - pred_min))
+                simulated_outcome = float((np.mean(preds_sim) - pred_min) / (pred_max - pred_min))
+            else:
+                current_outcome = float(np.mean(preds_orig))
+                simulated_outcome = float(np.mean(preds_sim))
+    else:
+        current_outcome = df[target].mean() if pd.api.types.is_numeric_dtype(df[target]) else (df[target] == df[target].mode().iloc[0]).mean()
+        simulated_outcome = df_sim[target].mean() if pd.api.types.is_numeric_dtype(df[target]) else (df_sim[target] == df_sim[target].mode().iloc[0]).mean()
+
+    current_pct = _validate_pct(float(current_outcome * 100), "what-if current")
+    simulated_pct = _validate_pct(float(simulated_outcome * 100), "what-if simulated")
+
+    change = simulated_outcome - current_outcome
+    change_pct = round(float(change / current_outcome * 100), 1) if current_outcome != 0 else 0
 
     return {
         "scenario": scenario_type.replace("_", " ").title(),
         "adjusted_feature": top_feature,
-        "current_value": round(min(float(current_outcome * 100), 100), 1),
-        "simulated_value": round(min(float(simulated_outcome * 100), 100), 1),
-        "change_pct": round(float((simulated_outcome - current_outcome) / current_outcome * 100), 1),
+        "current_value": current_pct,
+        "simulated_value": simulated_pct,
+        "change_pct": change_pct,
         "improvement": "reduction" if simulated_outcome < current_outcome else "increase",
     }
 
@@ -587,29 +650,60 @@ async def run_phase2_predictive(doc_id: int) -> dict[str, Any]:
     total_pop = bi.get("total_population", 0)
     confidence_pct = bi.get("confidence", 50)
 
+    # Rebuild best model for model-aware segment analysis and what-if simulations
+    model = None
+    X_columns = None
+    try:
+        from sklearn.model_selection import train_test_split
+        problem_type = tech.get("task", "classification")
+        target = base.get("technical", {}).get("target", "")
+        if target and target in df.columns:
+            X_all = df.drop(columns=[target]).select_dtypes(include=["number"])
+            X_all = X_all.loc[:, X_all.nunique() > 1]
+            if X_all.shape[1] >= 1:
+                y_all = df[target]
+                if problem_type == "classification" and y_all.dtype in ("float64", "object"):
+                    y_all = y_all.astype(int)
+                model_name = tech.get("model", "")
+                model = _rebuild_model(model_name, problem_type)
+                if model is not None:
+                    model.fit(X_all, y_all)
+                    X_columns = X_all.columns.tolist()
+    except Exception as e:
+        logger.warning("Model rebuild failed for segments/what-if: %s", e)
+
     # Module 1: Prediction Explanation
     drivers = _shap_style_importance(None, None, [f["feature"] for f in importance]) or importance
     explanation = _generate_nl_explanation(target, drivers, n_positive, total_pop, revenue_at_risk, confidence_pct, tech.get("model", ""))
 
     # Module 2: Forecast Timeline
     timeline = forecast_timeline(df, target)
+    if timeline.get("annual_growth_pct") is not None:
+        timeline["annual_growth_pct"] = round(timeline["annual_growth_pct"], 1)
 
-    # Module 3: Segment Analysis
-    segments = segment_analysis(df, target, importance, revenue_at_risk)
+    # Module 3: Segment Analysis (model-aware)
+    segments = segment_analysis(df, target, importance, revenue_at_risk, model, X_columns)
 
-    # Module 4: What-If Simulations
+    # Module 4: What-If Simulations (model-aware)
     simulations = []
     for scenario_type in ["retention_program", "price_change", "budget_increase", "contract_changes", "staffing_changes"]:
-        sim = simulate_scenario(df, target, scenario_type, 20)
+        sim = simulate_scenario(df, target, scenario_type, 20, model, X_columns)
         if "error" not in sim:
+            # Validate all output percentages are in 0-100
+            sim["current_value"] = _validate_pct(sim["current_value"], f"what-if {scenario_type} current")
+            sim["simulated_value"] = _validate_pct(sim["simulated_value"], f"what-if {scenario_type} simulated")
             simulations.append(sim)
 
     # Module 5: Early Warnings
     warnings_list = early_warnings(df, target)
+    for w in warnings_list:
+        w["alert"] = w.get("alert", "")[:200]
 
     # Module 6: Prescriptive Recommendations
     risk_score = tech.get("risk_score", 50)
     prescriptive = prescriptive_recommendations(target, risk_score, segments, revenue_at_risk)
+    for r in prescriptive:
+        r["priority_score"] = _validate_pct(r.get("priority_score", 50), "priority")
 
     # Module 7: Industry Intelligence
     industry = detect_industry(df)
@@ -641,3 +735,38 @@ async def run_phase2_predictive(doc_id: int) -> dict[str, Any]:
         "scenarios": base.get("scenarios", {}),
         "technical": tech,
     }
+
+
+def _rebuild_model(name: str, problem_type: str):
+    """Rebuild a model by name for segment risk and what-if predictions."""
+    try:
+        from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
+        from sklearn.linear_model import LogisticRegression, LinearRegression, Ridge
+        if problem_type == "classification":
+            if "Logistic" in name: return LogisticRegression(max_iter=1000, random_state=42)
+            if "Random" in name: return RandomForestClassifier(n_estimators=50, random_state=42, n_jobs=-1)
+            if "XGBoost" in name:
+                from xgboost import XGBClassifier
+                return XGBClassifier(n_estimators=50, random_state=42, verbosity=0)
+            if "LightGBM" in name:
+                import lightgbm as lgb
+                return lgb.LGBMClassifier(n_estimators=50, random_state=42, verbose=-1)
+            if "CatBoost" in name:
+                from catboost import CatBoostClassifier
+                return CatBoostClassifier(n_estimators=50, random_state=42, verbose=0)
+        else:
+            if "Linear" in name: return LinearRegression()
+            if "Ridge" in name: return Ridge(alpha=1.0, random_state=42)
+            if "Random" in name: return RandomForestRegressor(n_estimators=50, random_state=42, n_jobs=-1)
+            if "XGBoost" in name:
+                from xgboost import XGBRegressor
+                return XGBRegressor(n_estimators=50, random_state=42, verbosity=0)
+            if "LightGBM" in name:
+                import lightgbm as lgb
+                return lgb.LGBMRegressor(n_estimators=50, random_state=42, verbose=-1)
+            if "CatBoost" in name:
+                from catboost import CatBoostRegressor
+                return CatBoostRegressor(n_estimators=50, random_state=42, verbose=0)
+    except Exception:
+        pass
+    return None

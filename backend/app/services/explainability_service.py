@@ -19,6 +19,31 @@ except ImportError:
     HAS_SHAP = False
 
 
+def _validate_pct(value: float, name: str = "") -> float:
+    """Clamp percentage to 0-100 and reject NaN/Inf."""
+    if np.isnan(value) or np.isinf(value):
+        logger.warning("Invalid %s value: %s, replacing with 0", name, value)
+        return 0.0
+    return max(0.0, min(100.0, round(float(value), 1)))
+
+
+def _validate_prob(proba: float, name: str = "") -> float:
+    """Clamp probability to 0-1 and reject NaN/Inf."""
+    if np.isnan(proba) or np.isinf(proba):
+        logger.warning("Invalid %s probability: %s, replacing with 0", name, proba)
+        return 0.0
+    return max(0.0, min(1.0, float(proba)))
+
+
+def _normalize_importance(values: list[float]) -> list[float]:
+    """Normalize a list of importance values so they sum to 1.0."""
+    arr = np.array([abs(v) for v in values])
+    total = arr.sum()
+    if total <= 0:
+        return [0.0] * len(values)
+    return (arr / total).tolist()
+
+
 def _cross_val_score(model, X, y, cv: int = 5) -> dict:
     """Cross-validated performance metrics."""
     from sklearn.model_selection import cross_val_score, KFold
@@ -97,8 +122,18 @@ def _shap_values(model, X_test) -> list[dict]:
     return []
 
 
+def _normalize_shap(results: list[dict]) -> list[dict]:
+    """Normalize SHAP values so absolute values sum to ~1.0."""
+    raw = [abs(r["shap_value"]) for r in results]
+    total = sum(raw)
+    if total > 0:
+        for r, v in zip(results, raw):
+            r["shap_value"] = round(v / total, 4)
+    return results
+
+
 def _model_based_importance(model, feature_names: list[str]) -> list[dict]:
-    """Extract built-in feature importance from model."""
+    """Extract built-in feature importance from model and normalize to sum of 1.0."""
     try:
         if hasattr(model, "feature_importances_"):
             imp = model.feature_importances_
@@ -110,9 +145,12 @@ def _model_based_importance(model, feature_names: list[str]) -> list[dict]:
         if len(feature_names) != len(imp):
             feature_names = [f"feature_{i}" for i in range(len(imp))]
 
+        raw = [float(v) for v in imp]
+        normalized = _normalize_importance(raw)
+
         results = []
         for i, name in enumerate(feature_names):
-            results.append({"feature": name, "importance": round(float(imp[i]), 4)})
+            results.append({"feature": name, "importance": round(normalized[i], 4)})
         results.sort(key=lambda x: -x["importance"])
         return results
     except Exception:
@@ -121,20 +159,21 @@ def _model_based_importance(model, feature_names: list[str]) -> list[dict]:
 
 def compute_confidence(
     cv_result: dict, dq_score: float, n_samples: int, n_features: int,
-    n_models_tested: int, feature_importance: list[dict]
+    n_models_tested: int, feature_importance: list[dict],
+    prediction_intervals: dict | None = None,
 ) -> dict:
     """
     Compute prediction confidence from deterministic factors only.
     No AI estimates. Based on: cross-validation, data quality,
-    sample size, feature consistency, model stability.
+    sample size, feature consistency, model stability, prediction intervals.
     """
     score = 50.0
 
-    # Cross-validation (30% weight)
+    # Cross-validation (25% weight)
     cv_mean = cv_result.get("cv_mean")
     cv_std = cv_result.get("cv_std")
     if cv_mean is not None:
-        score += min(cv_mean * 30, 25)
+        score += min(cv_mean * 25, 20)
         cv_stability = 1 - min(cv_std / (abs(cv_mean) + 1e-10), 1)
         score += cv_stability * 5
     else:
@@ -178,6 +217,12 @@ def compute_confidence(
     elif n_models_tested >= 2:
         score += 5
 
+    # Prediction intervals (10% weight)
+    pi_width = prediction_intervals.get("interval_width") if prediction_intervals else None
+    if pi_width is not None and pi_width > 0:
+        pi_score = max(0, 10 - min(pi_width * 2, 10))
+        score += pi_score
+
     score = max(0, min(100, round(score, 1)))
 
     factors = []
@@ -207,12 +252,21 @@ def compute_confidence(
     else:
         factors.append(f"Limited features ({n_features})")
 
+    if pi_width is not None:
+        if pi_width < 0.5:
+            factors.append("Tight prediction intervals")
+        elif pi_width < 1.0:
+            factors.append("Adequate prediction intervals")
+        else:
+            factors.append("Wide prediction intervals — forecasts less precise")
+
     breakdown = {
-        "cross_validation": round(min(cv_mean * 30 if cv_mean else 10, 30), 1) if cv_mean else 5,
+        "cross_validation": round(min(cv_mean * 25 if cv_mean else 8, 25), 1) if cv_mean else 5,
         "data_quality": round(dq_weight, 1),
         "sample_size": round(min(n_samples / 50, 20), 1),
         "feature_strength": round(min(n_features * 2, 10), 1),
         "model_stability": round(min(n_models_tested * 3, 10), 1),
+        "prediction_intervals": round(max(0, min(pi_width * 2, 10)), 1) if pi_width else 0,
     }
 
     grade = "Excellent" if score >= 80 else "Good" if score >= 60 else "Moderate" if score >= 40 else "Poor"
@@ -261,9 +315,16 @@ async def run_explainability(
     # 2. Permutation Importance
     perm_metric = "r2" if problem_type != "classification" else "f1"
     results["permutation_importance"] = _permutation_importance(model, X_test, y_test, perm_metric)[:10]
+    if results["permutation_importance"]:
+        raw = [abs(p["importance"]) for p in results["permutation_importance"]]
+        total = sum(raw)
+        if total > 0:
+            for p, v in zip(results["permutation_importance"], raw):
+                p["importance"] = round(v / total, 4)
 
     # 3. SHAP Values
-    results["shap_values"] = _shap_values(model, X_test)[:10]
+    results["shap_values"] = _shap_values(model, X_test)
+    results["shap_values"] = _normalize_shap(results["shap_values"])[:10]
 
     # 4. Cross-validation
     cv_result = _cross_val_score(model, X_train, y_train)
@@ -271,8 +332,9 @@ async def run_explainability(
 
     # 5. Confidence
     imp_for_conf = results["feature_importance"] or results["permutation_importance"] or []
+    pi = results.get("prediction_intervals", {})
     results["confidence"] = compute_confidence(
-        cv_result, dq_score, X_train.shape[0], X_train.shape[1], n_models_tested, imp_for_conf
+        cv_result, dq_score, X_train.shape[0], X_train.shape[1], n_models_tested, imp_for_conf, pi
     )
 
     # 6. Prediction Intervals
