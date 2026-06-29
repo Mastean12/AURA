@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import {
   Brain, Shield, AlertTriangle, Target, Lightbulb, CheckCircle, Loader2,
   TrendingUp, DollarSign, Users, Clock, Database, Eye, EyeOff,
-  BarChart3, Activity, Layers, Sigma, ScatterChart, Table2,
+  BarChart3, Activity, Layers, Sigma, ScatterChart, Table2, FileText,
 } from "lucide-react";
 import { listDocuments } from "@/lib/api";
 import type { DocumentResponse } from "@/types";
@@ -62,6 +62,11 @@ export default function ExecutivePage() {
   const allModels = an.automl_details?.all_models || [];
   const cm = metrics.confusion_matrix || [];
   const analystNote = an.note || "";
+
+  const roi = data?.roi_analysis || {};
+  const priorities = data?.action_priorities || {};
+  const roadmap = data?.implementation_roadmap || {};
+  const board = data?.board_narrative || {};
 
   return (
     <div className="mx-auto max-w-7xl space-y-6 p-6">
@@ -316,6 +321,148 @@ export default function ExecutivePage() {
                         </div>
                       </div>
                     ))}
+                  </div>
+                </div>
+              )}
+
+              {/* ROI Analysis */}
+              {roi.portfolio_roi != null && (
+                <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-5">
+                  <div className="flex items-center gap-2 mb-3">
+                    <TrendingUp className="h-5 w-5 text-emerald-400" />
+                    <h2 className="text-sm font-medium uppercase tracking-wider text-zinc-500">ROI Analysis</h2>
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-4 mb-3">
+                    {[
+                      ["Portfolio ROI", `${roi.portfolio_roi}x`, "text-emerald-400"],
+                      ["Net Benefit", `$${(roi.net_benefit || 0).toLocaleString()}`, "text-blue-400"],
+                      ["Total Investment", `$${(roi.total_investment || 0).toLocaleString()}`, "text-amber-400"],
+                      ["Expected Return", `$${(roi.total_expected_return || 0).toLocaleString()}`, "text-emerald-400"],
+                    ].map(([label, val, color]) => (
+                      <div key={label as string} className="rounded-lg bg-zinc-800/30 p-3 text-center">
+                        <p className="text-[9px] text-zinc-500 uppercase">{label as string}</p>
+                        <p className={`text-sm font-bold ${color}`}>{val as string}</p>
+                      </div>
+                    ))}
+                  </div>
+                  {roi.narrative && <p className="text-[10px] text-zinc-500 leading-relaxed">{roi.narrative}</p>}
+                  {roi.recommendations && roi.recommendations.length > 0 && (
+                    <div className="mt-2 space-y-1">
+                      {roi.recommendations.map((r: any, i: number) => (
+                        <div key={i} className="flex justify-between text-[10px] rounded bg-zinc-800/20 px-3 py-1.5">
+                          <span className="text-zinc-300">{r.action}</span>
+                          <span className="text-emerald-400 font-medium">{r.roi}x ROI · {r.payback_months}mo payback</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Action Priorities */}
+              {priorities.summary && (
+                <div className="rounded-xl border border-purple-800/30 bg-purple-950/20 p-5">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Target className="h-5 w-5 text-purple-400" />
+                    <h2 className="text-sm font-medium uppercase tracking-wider text-purple-400">Action Prioritization</h2>
+                  </div>
+                  <p className="text-[10px] text-zinc-400 mb-3">{priorities.summary}</p>
+                  <div className="grid gap-2">
+                    {(priorities.priorities || []).slice(0, 6).map((p: any, i: number) => (
+                      <div key={i} className="rounded-lg bg-zinc-800/30 p-3">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-xs font-semibold text-zinc-200">{p.title}</span>
+                          <div className="flex items-center gap-2">
+                            <span className={`rounded px-1.5 py-0.5 text-[9px] font-medium uppercase ${
+                              p.timeline === "Immediate" ? "bg-red-900/50 text-red-300"
+                                : p.timeline?.includes("90") ? "bg-amber-900/50 text-amber-300"
+                                  : p.timeline?.includes("180") ? "bg-blue-900/50 text-blue-300"
+                                    : "bg-zinc-700 text-zinc-400"
+                            }`}>{p.timeline?.split(" ")[0]}</span>
+                            <span className="text-[10px] font-bold text-zinc-300">{p.priority_score}</span>
+                          </div>
+                        </div>
+                        <div className="h-1 rounded-full bg-zinc-800 overflow-hidden">
+                          <div className={`h-full rounded-full ${p.priority_score >= 80 ? "bg-red-500" : p.priority_score >= 60 ? "bg-amber-500" : p.priority_score >= 40 ? "bg-blue-500" : "bg-zinc-500"}`}
+                            style={{ width: `${p.priority_score}%` }} />
+                        </div>
+                        <div className="flex gap-3 mt-1 text-[9px] text-zinc-500">
+                          <span>Score: {p.priority_score}</span>
+                          <span>Effort: {p.effort}</span>
+                          {p.expected_roi && <span>ROI: {p.expected_roi}</span>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Implementation Roadmap */}
+              {roadmap.phases && (
+                <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-5">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Activity className="h-5 w-5 text-cyan-400" />
+                    <h2 className="text-sm font-medium uppercase tracking-wider text-zinc-500">Implementation Roadmap</h2>
+                  </div>
+                  {roadmap.narrative && <p className="text-[10px] text-zinc-500 mb-3">{roadmap.narrative}</p>}
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                    {["immediate", "short_term", "medium_term", "long_term"].map(phaseKey => {
+                      const phase = roadmap.phases[phaseKey];
+                      if (!phase) return null;
+                      return (
+                        <div key={phaseKey} className={`rounded-lg p-3 border ${
+                          phaseKey === "immediate" ? "border-red-800/30 bg-red-950/20"
+                            : phaseKey === "short_term" ? "border-amber-800/30 bg-amber-950/20"
+                              : phaseKey === "medium_term" ? "border-blue-800/30 bg-blue-950/20"
+                                : "border-zinc-700 bg-zinc-800/30"
+                        }`}>
+                          <p className="text-[9px] font-medium uppercase tracking-wider mb-1">{phase.label}</p>
+                          <p className="text-[9px] text-zinc-500 mb-1">{phase.focus}</p>
+                          <div className="space-y-0.5">
+                            {(phase.actions || []).slice(0, 3).map((a: any, i: number) => (
+                              <p key={i} className="text-[9px] text-zinc-300">• {a.action}</p>
+                            ))}
+                          </div>
+                          <p className="text-[9px] text-zinc-600 mt-1">{phase.actions?.length || 0} actions</p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Board Narrative */}
+              {board.board_summary && (
+                <div className="rounded-xl border border-blue-900/30 bg-gradient-to-br from-blue-950/20 to-zinc-900/50 p-5">
+                  <div className="flex items-center gap-2 mb-3">
+                    <FileText className="h-5 w-5 text-blue-400" />
+                    <h2 className="text-sm font-medium uppercase tracking-wider text-blue-400">Board-Ready Narrative</h2>
+                  </div>
+                  <div className="space-y-3">
+                    {board.executive_narrative && (
+                      <div>
+                        <p className="text-[10px] font-medium uppercase text-zinc-500 mb-1">Executive Narrative</p>
+                        <p className="text-xs text-zinc-200 leading-relaxed">{board.executive_narrative}</p>
+                      </div>
+                    )}
+                    {board.board_summary && (
+                      <div>
+                        <p className="text-[10px] font-medium uppercase text-zinc-500 mb-1">Board Summary</p>
+                        <p className="text-xs text-zinc-200 leading-relaxed">{board.board_summary}</p>
+                      </div>
+                    )}
+                    {board.strategic_context && (
+                      <div>
+                        <p className="text-[10px] font-medium uppercase text-zinc-500 mb-1">Strategic Context</p>
+                        <p className="text-xs text-zinc-200 leading-relaxed">{board.strategic_context}</p>
+                      </div>
+                    )}
+                    {board.call_to_action && (
+                      <div>
+                        <p className="text-[10px] font-medium uppercase text-zinc-500 mb-1">Call to Action</p>
+                        <p className="text-xs text-zinc-200 leading-relaxed">{board.call_to_action}</p>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}

@@ -423,6 +423,40 @@ Business Data:
         "margin_analysis": margin_squeeze,
     }
 
+    # Compute additional executive intelligence modules
+    bh = result["business_health"]
+    bh_overall = bh.get("overall", 70)
+    risk_level = "high" if bh_overall < 40 else "moderate" if bh_overall < 70 else "low"
+    risk_score = max(0, min(100, 100 - bh_overall))
+
+    risks_list = result.get("risks", [])
+    opps_list = result.get("opportunities", [])
+    recs_list = result.get("recommendations", [])
+
+    from app.services.roi_analysis_service import compute_roi
+    roi = compute_roi(risk_score, 0, 0, len(df), recs_list)
+
+    from app.services.action_prioritization_service import prioritize_actions
+    priorities = prioritize_actions(recs_list, risk_score, risk_level, bh)
+
+    from app.services.roadmap_service import build_roadmap
+    roadmap = build_roadmap(
+        priorities.get("priorities", []), risk_level, roi.get("total_expected_return", 0),
+        ds.get("dataset_type", "General Business"),
+    )
+
+    from app.services.board_narrative_service import generate_board_narrative
+    board = generate_board_narrative(
+        result["executive_summary"], bh, risks_list, opps_list, root_causes,
+        priorities, roadmap, roi, result["business_impact"],
+        ds.get("dataset_type", "General Business"),
+    )
+
+    result["roi_analysis"] = roi
+    result["action_priorities"] = priorities
+    result["implementation_roadmap"] = roadmap
+    result["board_narrative"] = board
+
     # Predictive pipeline: AutoML + Explainability + Scenario Analysis → Analyst section
     try:
         analyst = await _build_analyst_from_predictive_pipeline(doc_id, df)
