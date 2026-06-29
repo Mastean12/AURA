@@ -22,6 +22,7 @@ export default function AnalyticsPage() {
   const [businessData, setBusinessData] = useState<Record<string, any> | null>(null);
   const [pipelineStages, setPipelineStages] = useState<any[]>([]);
   const [execData, setExecData] = useState<Record<string, any> | null>(null);
+  const [kpiV2, setKpiV2] = useState<Record<string, any> | null>(null);
   const token = typeof window !== "undefined" ? localStorage.getItem("aura_token") : "";
   const authH = { "Content-Type": "application/json", Authorization: `Bearer ${token}` } as Record<string, string>;
 
@@ -43,16 +44,20 @@ export default function AnalyticsPage() {
     try {
       const a = await getAnalytics(selectedDoc);
       setAnalytics(a as any);
-      const [bizRes, execRes] = await Promise.all([
+      const [bizRes, execRes, kpiRes] = await Promise.all([
         fetch(`${apiBase}/api/v1/analytics/business-analytics`, {
           method: "POST", headers: authH, body: JSON.stringify({ doc_id: selectedDoc }),
         }),
         fetch(`${apiBase}/api/v1/analytics/executive-intelligence-v3`, {
           method: "POST", headers: authH, body: JSON.stringify({ doc_id: selectedDoc }),
         }),
+        fetch(`${apiBase}/api/v1/analytics/kpis-v2`, {
+          method: "POST", headers: authH, body: JSON.stringify({ doc_id: selectedDoc }),
+        }),
       ]);
       if (bizRes.ok) setBusinessData(await bizRes.json());
       if (execRes.ok) setExecData(await execRes.json());
+      if (kpiRes.ok) setKpiV2(await kpiRes.json());
       setPipelineStages(prev => prev.map(s => ({ ...s, status: "completed" })));
     } catch {} finally { setLoading(false); }
   }
@@ -66,6 +71,8 @@ export default function AnalyticsPage() {
   const kpis = kpiSummary.kpis || [];
   const execBH = execData?.business_health || {};
   const execImpact = execData?.business_impact || {};
+  const kpiV2Primary = kpiV2?.primary_kpis || [];
+  const kpiV2Secondary = kpiV2?.secondary_kpis || [];
   const execFindings = execData?.key_findings || [];
   const execRootCauses = execData?.root_causes || [];
   const execRisks = execData?.risks || [];
@@ -167,6 +174,48 @@ export default function AnalyticsPage() {
                   <span className="ml-auto text-xs text-zinc-500">{(execData.confidence * 100).toFixed(0)}% confidence</span>
                 </div>
                 <p className="text-sm leading-relaxed text-zinc-200">{execData.executive_summary}</p>
+              </div>
+            )}
+
+            {/* Intelligent KPI Detection */}
+            {kpiV2Primary.length > 0 && (
+              <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-5">
+                <div className="flex items-center gap-2 mb-3">
+                  <BarChart3 className="h-5 w-5 text-emerald-400" />
+                  <h2 className="text-sm font-medium uppercase tracking-wider text-zinc-500">Intelligent KPIs</h2>
+                  <span className="ml-auto text-xs text-zinc-500">{kpiV2?.total_detected || 0} detected</span>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {kpiV2Primary.map((k: any, i: number) => (
+                    <div key={i} className="rounded-lg bg-emerald-950/30 border border-emerald-800/30 p-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] uppercase text-emerald-400 font-medium">Primary KPI</span>
+                        <span className="text-xs text-zinc-500">{(k.importance_score || 0).toFixed(0)}%</span>
+                      </div>
+                      <p className="text-sm font-semibold text-zinc-200 mt-1">{k.kpi}</p>
+                      <p className="text-lg font-bold text-zinc-100">{k.value}</p>
+                      {k.change !== null && (
+                        <span className={`text-xs ${k.change >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+                          {k.change >= 0 ? "↑" : "↓"} {Math.abs(k.change).toFixed(1)}%
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                  {kpiV2Secondary.slice(0, 4).map((k: any, i: number) => (
+                    <div key={i} className="rounded-lg bg-zinc-800/30 p-3">
+                      <p className="text-[10px] text-zinc-500">Secondary KPI</p>
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm font-semibold text-zinc-200">{k.kpi}</p>
+                        <p className="text-sm font-bold text-zinc-100">{k.value}</p>
+                      </div>
+                      {k.change !== null && (
+                        <span className={`text-xs ${k.change >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+                          {k.change >= 0 ? "↑" : "↓"} {Math.abs(k.change).toFixed(1)}%
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
 
