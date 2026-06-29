@@ -106,7 +106,7 @@ export default function AnalyticsPage() {
             </div>
           )}
 
-          {d.charts.length > 0 && !loading && <>
+          {(d.exec_summary || d.kpis.length > 0 || d.charts.length > 0 || d.risks?.length > 0) && !loading && <>
             {/* Executive Summary */}
             {d.exec_summary && (
               <div className="rounded-xl border border-blue-900/30 bg-blue-950/20 p-5">
