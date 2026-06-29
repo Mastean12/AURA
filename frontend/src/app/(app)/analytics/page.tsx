@@ -23,6 +23,7 @@ export default function AnalyticsPage() {
   const [pipelineStages, setPipelineStages] = useState<any[]>([]);
   const [execData, setExecData] = useState<Record<string, any> | null>(null);
   const [kpiV2, setKpiV2] = useState<Record<string, any> | null>(null);
+  const [chartRecommend, setChartRecommend] = useState<Record<string, any> | null>(null);
   const token = typeof window !== "undefined" ? localStorage.getItem("aura_token") : "";
   const authH = { "Content-Type": "application/json", Authorization: `Bearer ${token}` } as Record<string, string>;
 
@@ -44,7 +45,7 @@ export default function AnalyticsPage() {
     try {
       const a = await getAnalytics(selectedDoc);
       setAnalytics(a as any);
-      const [bizRes, execRes, kpiRes] = await Promise.all([
+      const [bizRes, execRes, kpiRes, chartRes] = await Promise.all([
         fetch(`${apiBase}/api/v1/analytics/business-analytics`, {
           method: "POST", headers: authH, body: JSON.stringify({ doc_id: selectedDoc }),
         }),
@@ -54,10 +55,14 @@ export default function AnalyticsPage() {
         fetch(`${apiBase}/api/v1/analytics/kpis-v2`, {
           method: "POST", headers: authH, body: JSON.stringify({ doc_id: selectedDoc }),
         }),
+        fetch(`${apiBase}/api/v1/charts/recommend`, {
+          method: "POST", headers: authH, body: JSON.stringify({ doc_id: selectedDoc }),
+        }),
       ]);
       if (bizRes.ok) setBusinessData(await bizRes.json());
       if (execRes.ok) setExecData(await execRes.json());
       if (kpiRes.ok) setKpiV2(await kpiRes.json());
+      if (chartRes.ok) setChartRecommend(await chartRes.json());
       setPipelineStages(prev => prev.map(s => ({ ...s, status: "completed" })));
     } catch {} finally { setLoading(false); }
   }
@@ -437,27 +442,39 @@ export default function AnalyticsPage() {
               )}
             </div>
 
-            {/* Key Visualizations */}
-            {charts.length > 0 && (
+            {/* Key Visualizations — from chart recommendation engine */}
+            {(() => {
+              const chartSrc = (chartRecommend?.charts as any[]) || charts;
+              if (chartSrc.length === 0) return null;
+              return (
               <div>
                 <div className="flex items-center gap-2 mb-3">
                   <BarChart3 className="h-5 w-5 text-zinc-400" />
                   <h2 className="text-sm font-medium uppercase tracking-wider text-zinc-500">Key Visualizations</h2>
+                  {chartRecommend?.charts?.length > 0 && <span className="text-[10px] text-zinc-600">{(chartRecommend as any).charts.length} charts</span>}
                 </div>
                 <div className="grid gap-4 sm:grid-cols-2">
-                  {charts.map((ch: any, i: number) => (
+                  {chartSrc.slice(0, 6).map((ch: any, i: number) => (
                     <div key={i} className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-3">
-                      <h3 className="mb-1 text-xs font-medium uppercase tracking-wider text-zinc-500 flex items-center gap-1.5">
-                        <BarChart3 className="h-3.5 w-3.5" />
-                        {ch.column}
-                        <span className="text-[10px] text-zinc-600 font-normal lowercase">({ch.chart_type} — {ch.business_reason})</span>
-                      </h3>
-                      <iframe srcDoc={ch.html} className="w-full h-64 rounded-lg border-0" title={ch.column} />
+                      <div className="flex items-center justify-between mb-1">
+                        <h3 className="text-xs font-medium uppercase tracking-wider text-zinc-500 flex items-center gap-1.5">
+                          <BarChart3 className="h-3.5 w-3.5" />
+                          {ch.column}
+                          <span className="text-[10px] text-zinc-600 font-normal lowercase">({ch.chart_type})</span>
+                        </h3>
+                        {ch.quality_score != null && (
+                          <span className={`text-[10px] font-medium ${ch.quality_score >= 70 ? "text-emerald-400" : ch.quality_score >= 40 ? "text-amber-400" : "text-red-400"}`}>
+                            {ch.quality_score}%
+                          </span>
+                        )}
+                      </div>
+                      {ch.business_reason && <p className="text-[10px] text-zinc-500 mb-2">{ch.business_reason}</p>}
+                      {ch.html && <iframe srcDoc={ch.html} className="w-full h-52 rounded-lg border-0" title={ch.column} />}
                     </div>
                   ))}
                 </div>
-              </div>
-            )}
+              </div>);
+            })()}
 
             {/* Comparative Analysis */}
             {comparative.length > 0 && (
