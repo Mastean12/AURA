@@ -6,6 +6,7 @@ import {
   LayoutDashboard, Sparkles, Upload, MessageSquare, BarChart3,
   TrendingUp, Building2, Brain, FileText, ScrollText, Shield,
   Users,   Settings, AlertTriangle, Target, CreditCard, Activity,
+  GitCompare, Eye,
 } from "lucide-react";
 
 const navGroups = [
@@ -22,6 +23,13 @@ const navGroups = [
       { href: "/chat", label: "Knowledge Base", icon: MessageSquare },
       { href: "/analytics", label: "Analytics", icon: BarChart3 },
       { href: "/predictive", label: "Predictive", icon: TrendingUp },
+      { href: "/executive-predictive", label: "Predictive Dashboard", icon: Eye },
+    ],
+  },
+  {
+    label: "Simulation",
+    items: [
+      { href: "/scenarios", label: "Scenario Engine", icon: GitCompare },
     ],
   },
   {
