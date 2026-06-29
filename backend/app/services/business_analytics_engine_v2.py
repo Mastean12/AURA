@@ -11,12 +11,14 @@ from app.services.kpi_detection_service import discover_kpis as _discover_kpis_r
 logger = logging.getLogger(__name__)
 
 SKIP_PATTERNS = re.compile(
-    r"^(id$|.*_id$|uuid|email|phone|fax|password|token|secret|hash|url|link|address|name$|first_name|last_name|full_name)", re.I
+    r"(id$|_id$|uuid|email|phone|fax|password|token|secret|hash|url|link|address|name|title|headline|subject|content|text|body|description|comment|message|img|image|photo|picture|avatar|icon|thumbnail)", re.I
 )
 
 
-def _is_skip_column(name: str) -> bool:
-    return bool(SKIP_PATTERNS.match(name.strip()))
+def _is_skip_column(name: str, classification: str = "") -> bool:
+    if classification in ("identifier", "text"):
+        return True
+    return bool(SKIP_PATTERNS.search(name.strip()))
 
 
 def _best_chart_type(col: str, classification: str, dtype: str, nunique: int, is_target: bool, is_time: bool) -> str:
@@ -80,10 +82,10 @@ async def get_business_analytics(doc_id: int) -> dict[str, Any]:
     seen_cols = set()
     for col_info in ds.get("columns", []):
         name = col_info["name"]
-        if name in seen_cols or _is_skip_column(name):
+        cls = col_info.get("classification", "")
+        if name in seen_cols or _is_skip_column(name, cls):
             continue
         seen_cols.add(name)
-        cls = col_info.get("classification")
         dtype = col_info.get("dtype")
         nunique = col_info.get("nunique", 0)
         is_target = col_info.get("is_target", False)
