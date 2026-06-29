@@ -96,7 +96,7 @@ def generate_business_impact(
         exposure = _fmt_currency(population_at_risk * 1000) if population_at_risk > 0 else "Undetermined"
 
     if total_population > 0:
-        pop_pct = round(population_at_risk / total_population * 100, 1)
+        pop_pct = round(min(population_at_risk / total_population, 1) * 100, 1)
         affected = f"{population_at_risk:,} records affected ({pop_pct}% of population)"
     else:
         affected = f"{population_at_risk:,} records identified"
@@ -104,7 +104,7 @@ def generate_business_impact(
     return {
         "financial_exposure": _fmt_currency(revenue_at_risk) if revenue_at_risk > 0 else exposure,
         "financial_exposure_raw": round(revenue_at_risk, 2),
-        "at_risk_percentage": round(population_at_risk / total_population * 100, 1) if total_population > 0 else 0,
+        "at_risk_percentage": round(min(population_at_risk / total_population, 1) * 100, 1) if total_population > 0 else 0,
         "impact_level": impact_level,
         "risk_level": risk_level,
         "urgency": urgency,
@@ -127,7 +127,7 @@ def generate_key_drivers(
         val = d.get("importance") or d.get("shap_value", 0)
         if val is None:
             continue
-        influence_pct = round(val * 100, 1) if val < 1 else round(val, 1)
+        influence_pct = round(min(val, 1) * 100, 1)
         if i == 0:
             direction = "primary"
             narrative = f"{feat} is the dominant factor with {influence_pct}% influence — this is the single most important variable driving the prediction."

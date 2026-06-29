@@ -198,7 +198,7 @@ def build_executive_report(
                 pdf.set_font("Helvetica", "B", 8)
                 pdf.set_text_color(20, 30, 50)
                 pdf.cell(5)
-                pdf.cell(0, 5, f"{i+1}. {d['feature'].replace('_', ' ').title()} — {d.get('pct', d.get('importance',0)*100):.0f}% influence", new_x="LMARGIN", new_y="NEXT")
+                pdf.cell(0, 5, f"{i+1}. {d['feature'].replace('_', ' ').title()} — {min(d.get('pct', d.get('importance',0)*100), 100):.0f}% influence", new_x="LMARGIN", new_y="NEXT")
         pdf.space()
 
     # ── 4. Risk Assessment ──
@@ -379,7 +379,7 @@ def build_executive_report(
             pdf.body_bold("Feature Importance")
             pdf.table_header(["Rank", "Feature", "Importance", "Method"], [12, 80, 30, 40])
             for i, f in enumerate(feats[:10]):
-                imp_val = f.get("pct", f.get("importance", 0) * 100)
+                imp_val = min(f.get("pct", f.get("importance", 0) * 100), 100)
                 pdf.table_row([str(i+1), f["feature"][:60], f"{imp_val:.1f}%", "SHAP-style"], [12, 80, 30, 40], alt=(i % 2 == 0))
             pdf.space()
 

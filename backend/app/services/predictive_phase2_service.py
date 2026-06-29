@@ -31,7 +31,7 @@ def _generate_nl_explanation(target: str, drivers: list[dict], n_positive: int, 
     pct = round(n_positive / total * 100, 1) if total else 0
     driver_strs = []
     for d in drivers[:3]:
-        driver_strs.append(f"{d['feature'].replace('_', ' ').title()} ({round(d['importance'] * 100, 1)}%)")
+        driver_strs.append(f"{d['feature'].replace('_', ' ').title()} ({round(min(d['importance'], 1) * 100, 1)}%)")
     driver_text = ", ".join(driver_strs)
     revenue_str = f"${revenue_at_risk:,.0f}" if revenue_at_risk else "significant revenue"
     return (
@@ -266,14 +266,14 @@ def segment_analysis(df: pd.DataFrame, target: str, importance: list[dict], reve
             low_rev = float(low_subset[revenue_col].sum()) if revenue_col and len(low_subset) > 0 else revenue_at_risk * 0.5
             segments.append({
                 "segment": f"High {col_name}",
-                "risk_score": round(float(high_risk * 100), 1),
+                "risk_score": round(min(float(high_risk * 100), 100), 1),
                 "type": "numeric_high",
                 "count": len(high_subset),
                 "revenue_impact": round(high_rev * high_risk, 2) if revenue_col else 0,
             })
             segments.append({
                 "segment": f"Low {col_name}",
-                "risk_score": round(float(low_risk * 100), 1),
+                "risk_score": round(min(float(low_risk * 100), 100), 1),
                 "type": "numeric_low",
                 "count": len(low_subset),
                 "revenue_impact": round(low_rev * low_risk, 2) if revenue_col else 0,
@@ -291,7 +291,7 @@ def segment_analysis(df: pd.DataFrame, target: str, importance: list[dict], reve
                 seg_rev = float(subset[revenue_col].sum()) if revenue_col and len(subset) > 0 else revenue_at_risk * (len(subset) / len(df))
                 segments.append({
                     "segment": f"{cat}",
-                    "risk_score": round(float(risk * 100), 1),
+                    "risk_score": round(min(float(risk * 100), 100), 1),
                     "type": "categorical",
                     "count": len(subset),
                     "revenue_impact": round(seg_rev * risk, 2),
@@ -349,8 +349,8 @@ def simulate_scenario(df: pd.DataFrame, target: str, scenario_type: str, adjustm
     return {
         "scenario": scenario_type.replace("_", " ").title(),
         "adjusted_feature": top_feature,
-        "current_value": round(float(current_outcome * 100), 1),
-        "simulated_value": round(float(simulated_outcome * 100), 1),
+        "current_value": round(min(float(current_outcome * 100), 100), 1),
+        "simulated_value": round(min(float(simulated_outcome * 100), 100), 1),
         "change_pct": round(float((simulated_outcome - current_outcome) / current_outcome * 100), 1),
         "improvement": "reduction" if simulated_outcome < current_outcome else "increase",
     }

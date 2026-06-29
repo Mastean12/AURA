@@ -166,7 +166,7 @@ def _find_root_causes(df: pd.DataFrame, target: str, ds: dict) -> list[dict]:
                 if abs(gap) > 0.05:
                     causes.append({
                         "cause": f"'{top}' segment shows highest {target} risk",
-                        "evidence": f"'{top}' group has {round(float(grouped.iloc[0])*100, 1)}% rate vs '{bottom}' group at {round(float(grouped.iloc[-1])*100, 1)}%",
+                        "evidence": f"'{top}' group has {round(min(float(grouped.iloc[0]), 1)*100, 1)}% rate vs '{bottom}' group at {round(min(float(grouped.iloc[-1]), 1)*100, 1)}%",
                         "impact_area": "Customers",
                         "confidence": round(min(abs(gap) * 200, 100), 1),
                     })

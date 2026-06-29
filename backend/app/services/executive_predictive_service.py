@@ -97,7 +97,7 @@ async def generate_executive_prediction(doc_id: int) -> dict:
     root_causes = []
     for feat in importance[:6]:
         name = feat["feature"]
-        pct = round(feat["importance"] * 100, 1)
+        pct = round(min(feat["importance"], 1) * 100, 1)
         business_name = name.replace("_", " ").title()
         if pct > 15:
             root_causes.append(f"{business_name} — {pct}% influence — key driver of {target}")

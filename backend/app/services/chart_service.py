@@ -298,7 +298,7 @@ async def generate_smart_charts(doc_id: int) -> dict[str, Any]:
         chart["importance"] = r["importance"]
         chart["importance_method"] = r["method"]
         # Update chart title with importance information
-        importance_pct = round(r["importance"] * 100, 1)
+        importance_pct = round(min(abs(r["importance"]), 1) * 100, 1)
         fig_data = chart.get("data", {})
         if fig_data:
             layout = fig_data.get("layout", {})
