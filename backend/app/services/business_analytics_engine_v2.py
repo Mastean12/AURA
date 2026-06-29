@@ -122,7 +122,7 @@ async def get_business_analytics(doc_id: int) -> dict[str, Any]:
     trend_analysis = {}
     for col in trend_cols:
         try:
-            vals = df[col].dropna().values.astype(float)
+            vals = pd.to_numeric(df[col], errors='coerce').dropna().values.astype(float)
             if len(vals) >= 3:
                 recent = vals[-3:].mean()
                 earlier = vals[:3].mean()

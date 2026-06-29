@@ -146,7 +146,7 @@ def _fallback_recommendations(df: pd.DataFrame) -> list[dict]:
     numeric_cols = df.select_dtypes(include=["number"]).columns[:3]
 
     for col in numeric_cols:
-        values = df[col].dropna().values.astype(float)
+        values = pd.to_numeric(df[col], errors='coerce').dropna().values.astype(float)
         if len(values) < 3:
             continue
         recent = values[-3:].mean()

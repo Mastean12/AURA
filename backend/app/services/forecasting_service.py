@@ -74,7 +74,7 @@ async def generate_forecast(doc_id: int, column: str, periods: int = 30) -> dict
     if df is None or column not in df.columns:
         return _empty_forecast(column)
 
-    values = df[column].dropna().values.astype(float)
+    values = pd.to_numeric(df[column], errors='coerce').dropna().values.astype(float)
     if len(values) < 3:
         return _empty_forecast(column)
 

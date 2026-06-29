@@ -52,7 +52,7 @@ async def calculate_business_health(doc_ids: list[int] | None = None) -> dict:
                     numeric_cols = df.select_dtypes(include=["number"]).columns
                     if len(numeric_cols) >= 2:
                         for col in numeric_cols[:3]:
-                            vals = df[col].dropna().values.astype(float)
+                            vals = pd.to_numeric(df[col], errors='coerce').dropna().values.astype(float)
                             if len(vals) >= 4:
                                 recent = vals[-3:].mean()
                                 earlier = vals[:3].mean()

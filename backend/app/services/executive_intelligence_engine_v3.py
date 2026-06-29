@@ -84,7 +84,7 @@ def _compute_growth_rates(df: pd.DataFrame, kpi_cols: list[str]) -> list[dict]:
     for col in kpi_cols[:3]:
         if col not in df.columns:
             continue
-        vals = df[col].dropna().values.astype(float)
+        vals = pd.to_numeric(df[col], errors='coerce').dropna().values.astype(float)
         if len(vals) < 4:
             continue
         recent = vals[-3:].mean()
@@ -109,8 +109,8 @@ def _detect_margin_squeeze(df: pd.DataFrame, revenue_cols: list[str], profit_col
             if rev not in df.columns or prof not in df.columns:
                 continue
             try:
-                rev_vals = df[rev].dropna().values.astype(float)
-                prof_vals = df[prof].dropna().values.astype(float)
+                rev_vals = pd.to_numeric(df[rev], errors='coerce').dropna().values.astype(float)
+                prof_vals = pd.to_numeric(df[prof], errors='coerce').dropna().values.astype(float)
                 if len(rev_vals) < 4 or len(prof_vals) < 4:
                     continue
                 rev_growth = (rev_vals[-3:].mean() / rev_vals[:3].mean() - 1) * 100

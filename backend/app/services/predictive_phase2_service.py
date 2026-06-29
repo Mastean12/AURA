@@ -430,7 +430,7 @@ def early_warnings(df: pd.DataFrame, target: str) -> list[dict]:
 
     # Check for rapid changes in numeric columns
     for col in df.select_dtypes(include=["number"]).columns[:10]:
-        vals = df[col].dropna().values.astype(float)
+        vals = pd.to_numeric(df[col], errors='coerce').dropna().values.astype(float)
         if len(vals) < 10:
             continue
         recent = vals[-5:].mean()
@@ -456,7 +456,7 @@ def early_warnings(df: pd.DataFrame, target: str) -> list[dict]:
 
     # Check for anomaly spikes
     for col in df.select_dtypes(include=["number"]).columns[:5]:
-        vals = df[col].dropna().values.astype(float)
+        vals = pd.to_numeric(df[col], errors='coerce').dropna().values.astype(float)
         if len(vals) < 10:
             continue
         mean, std = np.mean(vals), np.std(vals)

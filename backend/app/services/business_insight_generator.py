@@ -68,8 +68,8 @@ def _detect_margin_squeeze(revenue_cols: list[str], profit_cols: list[str], df: 
             if rev not in df.columns or prof not in df.columns:
                 continue
             try:
-                rev_vals = df[rev].dropna().values.astype(float)
-                prof_vals = df[prof].dropna().values.astype(float)
+                rev_vals = pd.to_numeric(df[rev], errors='coerce').dropna().values.astype(float)
+                prof_vals = pd.to_numeric(df[prof], errors='coerce').dropna().values.astype(float)
                 if len(rev_vals) < 4 or len(prof_vals) < 4:
                     continue
                 rev_growth = (rev_vals[-3:].mean() / rev_vals[:3].mean() - 1) * 100
@@ -127,7 +127,7 @@ def generate_business_insights(df: pd.DataFrame, ds: dict | None = None) -> list
 
     # ── Insight 1: Growth trends ──
     for col in kpi_cols[:3]:
-        vals = df[col].dropna().values.astype(float)
+        vals = pd.to_numeric(df[col], errors='coerce').dropna().values.astype(float)
         if len(vals) < 4:
             continue
         trend = _detect_trend(vals)
@@ -191,7 +191,7 @@ def generate_business_insights(df: pd.DataFrame, ds: dict | None = None) -> list
 
     # ── Insight 6: Volatility/risk signals ──
     for col in numeric_cols[:3]:
-        vals = df[col].dropna().values.astype(float)
+        vals = pd.to_numeric(df[col], errors='coerce').dropna().values.astype(float)
         if len(vals) < 10:
             continue
         cv = np.std(vals) / (np.mean(vals) + 1e-10)
@@ -206,7 +206,7 @@ def generate_business_insights(df: pd.DataFrame, ds: dict | None = None) -> list
 
     # ── Insight 7: Seasonality/pattern detection ──
     for col in numeric_cols[:2]:
-        vals = df[col].dropna().values.astype(float)
+        vals = pd.to_numeric(df[col], errors='coerce').dropna().values.astype(float)
         if len(vals) < 14:
             continue
         try:

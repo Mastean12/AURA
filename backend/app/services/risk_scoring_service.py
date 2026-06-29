@@ -32,7 +32,7 @@ def _calculate_financial_risk(df: pd.DataFrame) -> tuple[int, str, list[str]]:
     volatile_count = 0
 
     for col in numeric_cols[:5]:
-        values = df[col].dropna().values.astype(float)
+        values = pd.to_numeric(df[col], errors='coerce').dropna().values.astype(float)
         if len(values) < 3:
             continue
         changes = np.diff(values) / (values[:-1] + 1e-10)
@@ -146,7 +146,7 @@ def _calculate_performance_risk(df: pd.DataFrame) -> tuple[int, str, list[str]]:
 
     declining_metrics = 0
     for col in numeric_cols[:5]:
-        values = df[col].dropna().values.astype(float)
+        values = pd.to_numeric(df[col], errors='coerce').dropna().values.astype(float)
         if len(values) < 4:
             continue
         recent = values[-3:].mean()

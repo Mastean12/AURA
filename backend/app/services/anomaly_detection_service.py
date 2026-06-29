@@ -101,7 +101,7 @@ async def detect_anomalies(doc_id: int, column: str, severity_filter: str | None
     if df is None or column not in df.columns:
         return {"column": column, "anomalies": [], "anomaly_count": 0, "high_severity_count": 0, "summary": ""}
 
-    values = df[column].dropna().values.astype(float)
+    values = pd.to_numeric(df[column], errors='coerce').dropna().values.astype(float)
     if len(values) < 5:
         return {"column": column, "anomalies": [], "anomaly_count": 0, "high_severity_count": 0, "summary": ""}
 
