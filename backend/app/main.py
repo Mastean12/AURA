@@ -31,6 +31,8 @@ from app.api.insights import router as insights_router
 from app.api.predict_detect import router as predict_detect_router
 from app.api.automl import router as automl_router
 from app.api.explain import router as explain_router
+from app.api.scenarios import router as scenarios_router
+from app.api.executive_decision import router as executive_decision_router
 from app.api.billing import router as billing_router
 from app.api.business_context import router as business_context_router
 
@@ -124,6 +126,8 @@ app.include_router(insights_router, prefix="/api/v1")
 app.include_router(predict_detect_router, prefix="/api/v1")
 app.include_router(automl_router, prefix="/api/v1")
 app.include_router(explain_router, prefix="/api/v1")
+app.include_router(executive_decision_router, prefix="/api/v1")
+app.include_router(scenarios_router, prefix="/api/v1")
 app.include_router(pipeline_router, prefix="/api/v1")
 
 
