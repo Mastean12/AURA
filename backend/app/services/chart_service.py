@@ -66,9 +66,51 @@ def _make_chart(df: pd.DataFrame, col: str, chart_type: str, height: int = 300) 
         fig.update_layout(xaxis_title=col, yaxis_title="Frequency", title=title,
                           bargap=0.05)
     elif chart_type == "line":
-        fig.add_trace(go.Scatter(x=data.index.tolist(), y=data.tolist(), mode="lines+markers",
-                                 marker_color=CHART_COLORS[0], hovertemplate="Index: %{x}<br>Value: %{y}"))
-        fig.update_layout(xaxis_title="Index", yaxis_title=col, title=title)
+        n = len(data)
+        # Try to find a date/time column in the dataframe for x-axis
+        date_col = None
+        for c in df.columns:
+            if c != col and pd.api.types.is_datetime64_any_dtype(df[c]):
+                date_col = c
+                break
+        if date_col is not None:
+            x_vals = df[date_col].iloc[data.index].tolist()
+            x_label = date_col
+            hover_tmpl = "%{x|%b %d, %Y}<br>%{y:.2f}"
+        else:
+            x_vals = data.index.tolist()
+            x_label = "Record"
+            hover_tmpl = "%{x}<br>%{y:.2f}"
+
+        if n > 100:
+            mode = "lines"
+            line_width = 1.5
+            marker_size = 0
+        elif n > 20:
+            mode = "lines+markers"
+            line_width = 2
+            marker_size = 4
+        else:
+            mode = "lines+markers"
+            line_width = 2.5
+            marker_size = 6
+
+        fig.add_trace(go.Scatter(
+            x=x_vals, y=data.tolist(),
+            mode=mode,
+            line=dict(color=CHART_COLORS[0], width=line_width),
+            marker=dict(size=marker_size, color=CHART_COLORS[0]),
+            hovertemplate=hover_tmpl,
+            fill="tozeroy" if n < 50 else None,
+            fillcolor=f"rgba(99, 102, 241, 0.08)",
+        ))
+        fig.update_layout(
+            xaxis_title=x_label,
+            yaxis_title=col,
+            title=title,
+            hovermode="x unified",
+            xaxis=dict(rangeslider=dict(visible=True, thickness=0.05)) if n > 200 else dict(),
+        )
 
     return {
         "column": col,
