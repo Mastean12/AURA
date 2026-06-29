@@ -25,6 +25,7 @@ from app.api.users import router as users_router
 from app.api.data_intelligence import router as data_intel_router
 from app.api.pipeline import router as pipeline_router
 from app.api.columns import router as columns_router
+from app.api.chart_recommend import router as chart_recommend_router
 from app.api.billing import router as billing_router
 from app.api.business_context import router as business_context_router
 
@@ -112,6 +113,7 @@ app.include_router(billing_router, prefix="/api/v1")
 app.include_router(data_intel_router, prefix="/api/v1")
 app.include_router(business_context_router, prefix="/api/v1")
 app.include_router(columns_router, prefix="/api/v1")
+app.include_router(chart_recommend_router, prefix="/api/v1")
 app.include_router(pipeline_router, prefix="/api/v1")
 
 
