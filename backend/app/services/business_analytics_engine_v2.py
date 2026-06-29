@@ -60,7 +60,7 @@ async def get_business_analytics(doc_id: int) -> dict[str, Any]:
         return {"error": "Document not found"}
 
     import io
-    df = pd.read_csv(io.StringIO(doc.content)) if doc.content.count(",") > 5 else None
+    df = pd.read_csv(io.StringIO(doc.content), on_bad_lines="skip") if doc.content.count(",") > 5 else None
     if df is None or len(df.columns) < 2:
         return {"error": "Dataset must be tabular"}
 

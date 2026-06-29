@@ -565,7 +565,7 @@ async def run_phase2_predictive(doc_id: int) -> dict[str, Any]:
     if not doc or not doc.content:
         return {"error": "Document not found"}
 
-    df = pd.read_csv(io.StringIO(doc.content)) if doc.content.count(",") > 5 else None
+    df = pd.read_csv(io.StringIO(doc.content), on_bad_lines="skip") if doc.content.count(",") > 5 else None
     if df is None or len(df.columns) < 2:
         return {"error": "Dataset must be tabular"}
 

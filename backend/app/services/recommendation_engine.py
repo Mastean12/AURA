@@ -82,7 +82,7 @@ async def generate_recommendations(doc_id: int) -> list[dict]:
     if not doc or not doc.content:
         return []
 
-    df = pd.read_csv(io.StringIO(doc.content)) if doc.content.count(",") > 5 else None
+    df = pd.read_csv(io.StringIO(doc.content), on_bad_lines="skip") if doc.content.count(",") > 5 else None
     if df is None or len(df.columns) < 2:
         return []
 

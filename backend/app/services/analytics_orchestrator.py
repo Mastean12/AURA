@@ -91,7 +91,7 @@ async def run_full_pipeline(doc_id: int) -> dict:
         return {"error": "Document not found", "doc_id": doc_id}
 
     pipeline.doc_title = doc.title or f"Document #{doc_id}"
-    df = pd.read_csv(io.StringIO(doc.content)) if doc.content.count(",") > 5 else None
+    df = pd.read_csv(io.StringIO(doc.content), on_bad_lines="skip") if doc.content.count(",") > 5 else None
     if df is None or len(df.columns) < 2:
         return {"error": "Dataset must be tabular with 2+ columns", "doc_id": doc_id}
 
