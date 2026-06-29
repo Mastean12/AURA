@@ -16,6 +16,10 @@ CURRENCY_PATTERNS = re.compile(r"^(price|amount|cost|fee|charge|salary|wage|budg
 REVENUE_PATTERNS = re.compile(r"^(revenue|sales|income|turnover|gross|total.*amount)", re.I)
 COST_PATTERNS = re.compile(r"^(cost|expense|spend|cogs|overhead|operating.*cost)", re.I)
 PROFIT_PATTERNS = re.compile(r"^(profit|margin|net.*income|ebitda|earnings)", re.I)
+PRICE_PATTERNS = re.compile(r"(price|amount|fee|charge|salary|wage|budget|subscription)", re.I)
+RATING_PATTERNS = re.compile(r"(rating|score|rank|star|review.*score)", re.I)
+COUNT_PATTERNS = re.compile(r"(count|num|quantity|total|stock|inventory|frequency)", re.I)
+PCT_PATTERNS = re.compile(r"(percent|pct|rate|ratio|discount|interest|margin|growth)", re.I)
 KPI_PATTERNS_R2 = re.compile(r"^(score|rate|ratio|percent|index|count|amount|value|total|balance|growth|roi|kpi)", re.I)
 
 TARGET_PATTERNS = {
@@ -83,37 +87,59 @@ def classify_column(name: str, dtype: str, nunique: int, nrows: int,
         return result
 
     is_numeric = dtype in ("int64", "float64", "int32", "float32", "int", "float")
+    is_str = dtype == "str" or dtype == "object"
+
+    # Check if a string column contains numeric data with currency symbols
+    if is_str and sample_values is not None and nunique > 1:
+        try:
+            cleaned = sample_values.astype(str).str.replace(r"[₹$€£¥, ]", "", regex=True).str.strip()
+            numeric_count = pd.to_numeric(cleaned, errors="coerce").notna().sum()
+            if numeric_count >= 3:
+                is_numeric = True
+                result["dtype"] = "numeric"
+                result["is_currency"] = True
+        except Exception:
+            pass
 
     if is_numeric:
         result["dtype"] = "numeric"
-        if CURRENCY_PATTERNS.match(col_lower):
-            result["is_currency"] = True
-        if REVENUE_PATTERNS.match(col_lower):
+        if REVENUE_PATTERNS.match(col_lower) or PRICE_PATTERNS.search(col_lower):
             result["classification"] = "kpi"; result["kpi_type"] = "revenue"
         elif COST_PATTERNS.match(col_lower):
             result["classification"] = "kpi"; result["kpi_type"] = "cost"
         elif PROFIT_PATTERNS.match(col_lower):
             result["classification"] = "kpi"; result["kpi_type"] = "profit"
-        elif KPI_PATTERNS_R2.match(col_lower):
+        elif KPI_PATTERNS_R2.match(col_lower) or RATING_PATTERNS.search(col_lower) or COUNT_PATTERNS.search(col_lower) or PCT_PATTERNS.search(col_lower):
             result["classification"] = "kpi"; result["kpi_type"] = "metric"
-        elif nunique <= 10:
+        elif nunique <= 10 and not result.get("is_currency"):
             result["classification"] = "categorical"; result["cardinality"] = "low"
         else:
             result["classification"] = "numeric"
             result["cardinality"] = "high" if nunique > 100 else "low"
 
+        if CURRENCY_PATTERNS.search(col_lower):
+            result["is_currency"] = True
+
         for target_type, pattern in TARGET_PATTERNS.items():
             if pattern.search(col_lower):
                 result["is_target"] = True; result["target_type"] = target_type; break
     else:
-        if nunique == nrows and nrows > 100:
-            result["classification"] = "identifier"
-        elif nunique <= 30:
-            result["classification"] = "categorical"; result["cardinality"] = "low"
-        elif nunique <= 100:
-            result["classification"] = "categorical"; result["cardinality"] = "medium"
+        # Check if column name suggests it's a KPI even if data is string (e.g., corrupted CSV)
+        if REVENUE_PATTERNS.match(col_lower) or COST_PATTERNS.match(col_lower) or PROFIT_PATTERNS.match(col_lower):
+            result["classification"] = "kpi"; result["kpi_type"] = "probable"
+            result["dtype"] = "numeric"
+        elif KPI_PATTERNS_R2.match(col_lower) or RATING_PATTERNS.search(col_lower) or COUNT_PATTERNS.search(col_lower) or PCT_PATTERNS.search(col_lower) or PRICE_PATTERNS.search(col_lower):
+            result["classification"] = "kpi"; result["kpi_type"] = "probable"
+            result["dtype"] = "numeric"
         else:
-            result["classification"] = "text"; result["cardinality"] = "high"
+            if nunique == nrows and nrows > 100:
+                result["classification"] = "identifier"
+            elif nunique <= 30:
+                result["classification"] = "categorical"; result["cardinality"] = "low"
+            elif nunique <= 100:
+                result["classification"] = "categorical"; result["cardinality"] = "medium"
+            else:
+                result["classification"] = "text"; result["cardinality"] = "high"
         for target_type, pattern in TARGET_PATTERNS.items():
             if pattern.search(col_lower):
                 result["is_target"] = True; result["target_type"] = target_type; break
@@ -156,8 +182,11 @@ def detect_target_variable(columns: list[dict[str, Any]], df: pd.DataFrame) -> d
 
 
 def detect_relationships(df: pd.DataFrame, columns: list[dict]) -> list[dict]:
-    """Map strong correlations between numeric variables."""
-    numeric_cols = [c["name"] for c in columns if c.get("dtype") == "numeric"]
+    """Map strong correlations between actual numeric columns."""
+    numeric_cols = []
+    for c in columns:
+        if c.get("dtype") == "numeric" and c["name"] in df.columns and pd.api.types.is_numeric_dtype(df[c["name"]]):
+            numeric_cols.append(c["name"])
     if len(numeric_cols) < 2:
         return []
     corr = df[numeric_cols].corr().round(3)
@@ -191,6 +220,9 @@ def analyze_dataset(df: pd.DataFrame) -> dict[str, Any]:
     target_info = detect_target_variable(columns, df)
     relationships = detect_relationships(df, columns)
 
+    def _truly_numeric(col_name: str) -> bool:
+        return col_name in df.columns and pd.api.types.is_numeric_dtype(df[col_name])
+
     return {
         "row_count": nrows,
         "column_count": ncols,
@@ -199,11 +231,12 @@ def analyze_dataset(df: pd.DataFrame) -> dict[str, Any]:
         "target_variable": target_info["target_variable"],
         "target_type": target_info["target_type"],
         "identifier_columns": [c["name"] for c in columns if c["classification"] == "identifier"],
-        "kpi_columns": [c["name"] for c in columns if c.get("classification") == "kpi"],
-        "kpi_details": [{"name": c["name"], "type": c.get("kpi_type", "metric")} for c in columns if c.get("classification") == "kpi"],
+        "kpi_columns": [c["name"] for c in columns if c.get("classification") == "kpi" and _truly_numeric(c["name"])],
+        "kpi_details": [{"name": c["name"], "type": c.get("kpi_type", "metric")} for c in columns if c.get("classification") == "kpi" and _truly_numeric(c["name"])],
         "currency_columns": [c["name"] for c in columns if c.get("is_currency")],
         "date_columns": [c["name"] for c in columns if c["classification"] == "date"],
-        "numeric_columns": [c["name"] for c in columns if c["classification"] == "numeric"],
+        "numeric_columns": [c["name"] for c in columns if c["classification"] == "numeric" and _truly_numeric(c["name"])],
+        "probable_kpi_columns": [c["name"] for c in columns if c.get("classification") == "kpi" and not _truly_numeric(c["name"])],
         "categorical_columns": [c["name"] for c in columns if c["classification"] == "categorical"],
         "geographic_columns": [c["name"] for c in columns if c["classification"] == "geographic"],
         "text_columns": [c["name"] for c in columns if c["classification"] == "text"],

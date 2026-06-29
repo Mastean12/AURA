@@ -62,9 +62,22 @@ async def get_business_analytics(doc_id: int) -> dict[str, Any]:
         return {"error": "Document not found"}
 
     import io
-    df = pd.read_csv(io.StringIO(doc.content), on_bad_lines="skip") if doc.content.count(",") > 5 else None
+    import numpy as np
+    df = pd.read_csv(io.StringIO(doc.content), on_bad_lines="skip", engine="python") if doc.content.count(",") > 5 else None
     if df is None or len(df.columns) < 2:
         return {"error": "Dataset must be tabular"}
+
+    # Clean currency columns: convert strings like "₹1,299" to float
+    currency_pattern = re.compile(r"[₹$€£¥,\s]")
+    for col in df.columns:
+        if df[col].dtype == "object" or df[col].dtype == "str":
+            try:
+                cleaned = df[col].astype(str).str.replace(currency_pattern, "", regex=True).str.strip()
+                numeric_vals = pd.to_numeric(cleaned, errors="coerce")
+                if numeric_vals.notna().sum() >= 5:
+                    df[col] = numeric_vals
+            except Exception:
+                pass
 
     ds = analyze_dataset(df)
     kpis = await _discover_kpis_raw(doc_id)
