@@ -445,16 +445,16 @@ async def _build_analyst_from_predictive_pipeline(doc_id: int, df: pd.DataFrame)
     ds = analyze_dataset(df)
     target = ds.get("target_variable", "")
     if not target or target not in df.columns:
-        return {}
+        return {"note": "Target variable not detected — cannot run predictive analysis for this dataset."}
 
     automl_result = await run_automl(doc_id, "", target)
     if "error" in automl_result:
-        return {}
+        return {"note": f"AutoML failed: {automl_result['error']}"}
 
     X = df.drop(columns=[target]).select_dtypes(include=["number"])
     X = filter_feature_columns(X)
     if X.shape[1] < 1:
-        return {}
+        return {"note": "No numeric features available after filtering identifiers — analyst details not available."}
     y = df[target]
 
     problem_type = automl_result.get("problem_type", "regression")
@@ -467,7 +467,7 @@ async def _build_analyst_from_predictive_pipeline(doc_id: int, df: pd.DataFrame)
     best_name = automl_result.get("best_model", "")
     model = _rebuild_model(best_name, problem_type)
     if model is None:
-        return {}
+        return {"note": f"Could not rebuild model '{best_name}' — analyst details not available."}
     model.fit(X_train, y_train)
 
     dq = run_data_quality_audit(df)

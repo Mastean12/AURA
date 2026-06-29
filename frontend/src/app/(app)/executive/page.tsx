@@ -61,6 +61,7 @@ export default function ExecutivePage() {
   const intervals = an.prediction_intervals || {};
   const allModels = an.automl_details?.all_models || [];
   const cm = metrics.confusion_matrix || [];
+  const analystNote = an.note || "";
 
   return (
     <div className="mx-auto max-w-7xl space-y-6 p-6">
@@ -337,6 +338,12 @@ export default function ExecutivePage() {
 
             {/* ===== ANALYST VIEW ===== */}
             {showAnalyst && <>
+              {analystNote && (
+                <div className="rounded-xl border border-amber-800/30 bg-amber-950/20 p-5 text-center">
+                  <p className="text-xs text-amber-300">{analystNote}</p>
+                </div>
+              )}
+
               {/* Model Info + Metrics */}
               {(modelInfo.selected_model || Object.keys(metrics).length > 0) && (
                 <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-5">
@@ -620,18 +627,16 @@ export default function ExecutivePage() {
             </>}
 
             {/* === VIEW TOGGLE === */}
-            {(modelInfo.selected_model || feats.length > 0) && (
-              <div className="flex items-center justify-center">
-                <button onClick={() => setShowAnalyst(!showAnalyst)}
-                  className="flex items-center gap-2 rounded-xl border border-zinc-700 bg-zinc-800/50 px-5 py-2.5 text-xs font-medium text-zinc-400 hover:border-zinc-600 hover:text-zinc-200 transition-colors">
-                  {showAnalyst ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
-                  {showAnalyst ? "Switch to Executive View" : "Show Analyst View (Technical Details)"}
-                  <span className="ml-1 rounded bg-zinc-700 px-1.5 py-0.5 text-[9px] text-zinc-500">
-                    {showAnalyst ? "Executive" : "Analyst"}
-                  </span>
-                </button>
-              </div>
-            )}
+            <div className="flex items-center justify-center">
+              <button onClick={() => setShowAnalyst(!showAnalyst)}
+                className="flex items-center gap-2 rounded-xl border border-zinc-700 bg-zinc-800/50 px-5 py-2.5 text-xs font-medium text-zinc-400 hover:border-zinc-600 hover:text-zinc-200 transition-colors">
+                {showAnalyst ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                {showAnalyst ? "Switch to Executive View" : "Show Analyst View (Technical Details)"}
+                <span className="ml-1 rounded bg-zinc-700 px-1.5 py-0.5 text-[9px] text-zinc-500">
+                  {showAnalyst ? "Executive" : "Analyst"}
+                </span>
+              </button>
+            </div>
           </>}
         </div>
       )}
