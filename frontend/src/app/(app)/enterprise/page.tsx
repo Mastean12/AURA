@@ -4,7 +4,8 @@ import { useState, useEffect } from "react";
 import {
   Building2, FileText, Layers, GitCompare, Bot, Briefcase,
   Loader2, Download, Lightbulb, AlertTriangle, Target, TrendingUp,
-  Shield, ChevronDown,
+  Shield, ChevronDown, BarChart3, Users, Truck, Globe, Zap,
+  Clock, DollarSign, Activity, Brain,
 } from "lucide-react";
 import {
   listDocuments, getIndustryDashboard, getMultiDocumentAnalysis,
@@ -14,6 +15,8 @@ import type {
   DocumentResponse, IndustryDashboardResponse, MultiDocumentResponse,
   ComparisonResponse, AutonomousAnalysisResponse, ExecutiveBriefingResponse,
 } from "@/types";
+
+const apiBase = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 export default function EnterprisePage() {
   const [docs, setDocs] = useState<DocumentResponse[]>([]);
@@ -38,6 +41,9 @@ export default function EnterprisePage() {
 
   const [briefing, setBriefing] = useState<ExecutiveBriefingResponse | null>(null);
   const [briefingLoading, setBriefingLoading] = useState(false);
+
+  const [enterpriseData, setEnterpriseData] = useState<Record<string, any> | null>(null);
+  const [enterpriseLoading, setEnterpriseLoading] = useState(false);
 
   useEffect(() => {
     if (!fetched) listDocuments().then(setDocs).finally(() => setFetched(true));
@@ -84,6 +90,33 @@ export default function EnterprisePage() {
     setBriefingLoading(true);
     try { setBriefing(await getExecutiveBriefing(selectedDoc)); } finally { setBriefingLoading(false); }
   }
+
+  async function runEnterpriseIntelligence() {
+    if (!selectedDoc) return;
+    setEnterpriseLoading(true); setEnterpriseData(null);
+    try {
+      const token = localStorage.getItem("aura_token");
+      const res = await fetch(`${apiBase}/api/v1/enterprise/intelligence`, {
+        method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ doc_id: selectedDoc }),
+      });
+      if (res.ok) setEnterpriseData(await res.json());
+    } catch {} finally { setEnterpriseLoading(false); }
+  }
+
+  const ei = enterpriseData || {};
+  const dept = ei.department_benchmarks || {};
+  const processData = ei.process_analysis || {};
+  const costData = ei.cost_optimization || {};
+  const workforce = ei.workforce_intelligence || {};
+  const supplyChain = ei.supply_chain_intelligence || {};
+  const customerData = ei.customer_intelligence || {};
+  const maturity = ei.digital_maturity || {};
+  const opsEff = ei.operational_efficiency || {};
+  const health = ei.enterprise_health || {};
+  const eiRisks = ei.risks || [];
+  const eiOpps = ei.opportunities || [];
+  const eiRecs = ei.recommendations || [];
 
   // AI-powered analyses are triggered manually via the Generate buttons below
 
@@ -461,6 +494,203 @@ export default function EnterprisePage() {
               </div>
             ) : (
               <p className="text-sm text-zinc-600 text-center py-8">Select two documents to compare.</p>
+            )}
+          </div>
+
+          {/* Enterprise Intelligence Engine */}
+          <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-5">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Building2 className="h-5 w-5 text-emerald-400" />
+                <h2 className="text-sm font-medium uppercase tracking-wider text-zinc-500">Enterprise Intelligence Engine</h2>
+                {health.score && <span className="ml-2 text-xs text-zinc-500">Health: <span className={`font-semibold ${health.score >= 70 ? "text-emerald-400" : health.score >= 40 ? "text-amber-400" : "text-red-400"}`}>{health.score}/100</span></span>}
+              </div>
+              <button onClick={runEnterpriseIntelligence} disabled={enterpriseLoading}
+                className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 px-5 py-2 text-xs font-medium hover:from-emerald-500 hover:to-teal-500 disabled:opacity-50 shadow-lg shadow-emerald-600/20">
+                {enterpriseLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
+                Run Enterprise Analysis
+              </button>
+            </div>
+
+            {enterpriseLoading ? (
+              <div className="h-48 animate-pulse rounded-xl bg-zinc-800/50" />
+            ) : enterpriseData ? (
+              <div className="space-y-4">
+                {/* Enterprise Health + Digital Maturity */}
+                <div className="grid gap-4 sm:grid-cols-4">
+                  {[
+                    ["Enterprise Health", health.score, `${health.score}/100`, health.level, "text-emerald-400"],
+                    ["Digital Maturity", maturity.score, `${maturity.level} (${maturity.score})`, `${maturity.factors?.length || 0} factors`, "text-blue-400"],
+                    ["Operational Efficiency", opsEff.overall, `${opsEff.overall}/100`, opsEff.factors?.length ? `${opsEff.factors.length} metrics` : "—", "text-cyan-400"],
+                    ["Workforce Engagement", workforce.engagement_score, `${workforce.engagement_score}/100`, `${workforce.alert_count || 0} alerts`, "text-purple-400"],
+                  ].filter(m => m[1] != null).map(([label, score, value, sub, color]) => (
+                    <div key={label as string} className="rounded-lg bg-zinc-800/30 p-3 text-center">
+                      <p className="text-[9px] uppercase text-zinc-500">{label as string}</p>
+                      <p className={`text-lg font-bold ${color as string}`}>{value as string}</p>
+                      <p className="text-[9px] text-zinc-600">{sub as string}</p>
+                      <div className="mt-1 h-1 rounded-full bg-zinc-800 overflow-hidden">
+                        <div className={`h-full rounded-full ${(score as number) >= 70 ? "bg-emerald-500" : (score as number) >= 40 ? "bg-amber-500" : "bg-red-500"}`}
+                          style={{ width: `${Math.min(score as number, 100)}%` }} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Department Benchmarks */}
+                {dept.benchmarks?.length > 0 && (
+                  <div>
+                    <p className="text-xs font-medium uppercase tracking-wider text-zinc-500 mb-2 flex items-center gap-1"><BarChart3 className="h-3.5 w-3.5 text-amber-400" /> Department Benchmarks</p>
+                    <p className="text-[10px] text-zinc-500 mb-2">{dept.summary}</p>
+                    <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                      {dept.benchmarks.map((b: any, i: number) => (
+                        <div key={i} className="rounded-lg bg-zinc-800/30 p-3">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-xs font-semibold text-zinc-200">{b.department}</span>
+                            <span className={`text-xs font-bold ${b.score >= 70 ? "text-emerald-400" : b.score >= 40 ? "text-amber-400" : "text-red-400"}`}>{b.score}</span>
+                          </div>
+                          <div className="h-1 rounded-full bg-zinc-800 overflow-hidden">
+                            <div className="h-full rounded-full bg-amber-500" style={{ width: `${Math.min(b.score, 100)}%` }} />
+                          </div>
+                          <p className="text-[9px] text-zinc-600 mt-1">{b.member_count} members</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Process Analysis + Bottlenecks */}
+                {processData.processes?.length > 0 && (
+                  <div>
+                    <p className="text-xs font-medium uppercase tracking-wider text-zinc-500 mb-2 flex items-center gap-1"><Activity className="h-3.5 w-3.5 text-cyan-400" /> Process Analysis</p>
+                    <p className="text-[10px] text-zinc-500 mb-2">{processData.summary}</p>
+                    {processData.bottlenecks?.length > 0 && (
+                      <div className="mb-2 space-y-1">
+                        {processData.bottlenecks.map((b: any, i: number) => (
+                          <div key={i} className="rounded-lg bg-red-950/20 border border-red-800/30 p-2 text-xs">
+                            <span className="text-red-400 font-medium">{b.metric}</span>
+                            <span className="text-zinc-400 ml-2">{b.impact}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                      {processData.processes.map((p: any, i: number) => (
+                        <div key={i} className="rounded-lg bg-zinc-800/30 p-2 text-center">
+                          <p className="text-[9px] text-zinc-500 truncate">{p.metric}</p>
+                          <p className="text-xs font-semibold text-zinc-200">{p.mean}</p>
+                          <p className="text-[9px] text-zinc-600">Eff: {p.efficiency}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Cost Optimization */}
+                {costData.opportunities?.length > 0 && (
+                  <div>
+                    <p className="text-xs font-medium uppercase tracking-wider text-zinc-500 mb-2 flex items-center gap-1"><DollarSign className="h-3.5 w-3.5 text-emerald-400" /> Cost Optimization</p>
+                    <p className="text-[10px] text-zinc-500 mb-2">{costData.summary}</p>
+                    <div className="space-y-1">
+                      {costData.opportunities.map((o: any, i: number) => (
+                        <div key={i} className="flex items-center justify-between rounded-lg bg-zinc-800/30 p-2 text-xs">
+                          <span className="text-zinc-300">{o.cost_driver}</span>
+                          <span className="text-emerald-400 font-medium">${o.savings_potential?.toLocaleString()}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Workforce + Supply Chain + Customer grid */}
+                <div className="grid gap-4 lg:grid-cols-3">
+                  {workforce.metrics?.length > 0 && (
+                    <div className="rounded-lg border border-zinc-800 bg-zinc-900/70 p-3">
+                      <p className="text-[10px] font-medium uppercase tracking-wider text-purple-400 mb-1 flex items-center gap-1"><Users className="h-3 w-3" /> Workforce</p>
+                      <p className="text-[9px] text-zinc-500 mb-1">{workforce.summary}</p>
+                      {workforce.alerts?.map((a: string, i: number) => (
+                        <p key={i} className="text-[9px] text-red-400">⚠ {a}</p>
+                      ))}
+                      <div className="mt-1 space-y-0.5">
+                        {workforce.metrics.slice(0, 4).map((m: any, i: number) => (
+                          <div key={i} className="flex justify-between text-[9px]">
+                            <span className="text-zinc-500">{m.metric}</span>
+                            <span className={`font-medium ${m.trend === "up" ? "text-emerald-400" : m.trend === "down" ? "text-red-400" : "text-zinc-300"}`}>{m.value}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {supplyChain.metrics?.length > 0 && (
+                    <div className="rounded-lg border border-zinc-800 bg-zinc-900/70 p-3">
+                      <p className="text-[10px] font-medium uppercase tracking-wider text-cyan-400 mb-1 flex items-center gap-1"><Truck className="h-3 w-3" /> Supply Chain</p>
+                      <p className="text-[9px] text-zinc-500 mb-1">{supplyChain.summary}</p>
+                      <div className="space-y-0.5">
+                        {supplyChain.metrics.slice(0, 4).map((m: any, i: number) => (
+                          <div key={i} className="flex justify-between text-[9px]">
+                            <span className="text-zinc-500">{m.metric}</span>
+                            <span className="font-medium text-zinc-300">{m.value}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {customerData.metrics?.length > 0 && (
+                    <div className="rounded-lg border border-zinc-800 bg-zinc-900/70 p-3">
+                      <p className="text-[10px] font-medium uppercase tracking-wider text-emerald-400 mb-1 flex items-center gap-1"><Globe className="h-3 w-3" /> Customer Intelligence</p>
+                      <p className="text-[9px] text-zinc-500 mb-1">{customerData.summary}</p>
+                      <div className="space-y-0.5">
+                        {customerData.metrics.slice(0, 4).map((m: any, i: number) => (
+                          <div key={i} className="flex justify-between text-[9px]">
+                            <span className="text-zinc-500">{m.metric}</span>
+                            <span className="font-medium text-zinc-300">{m.average}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Risks + Opportunities + Recommendations */}
+                {(eiRisks.length > 0 || eiOpps.length > 0 || eiRecs.length > 0) && (
+                  <div className="grid gap-4 lg:grid-cols-3">
+                    {eiRisks.length > 0 && (
+                      <div className="rounded-lg border border-red-800/30 bg-red-950/20 p-3">
+                        <p className="text-[10px] font-medium uppercase tracking-wider text-red-400 mb-1">Risks</p>
+                        {eiRisks.map((r: any, i: number) => (
+                          <div key={i} className="mb-1 last:mb-0 text-[9px]">
+                            <span className="text-zinc-300">{r.risk}</span>
+                            {r.severity && <span className={`ml-1 rounded px-1 text-[8px] ${r.severity === "High" ? "bg-red-900/50 text-red-300" : "bg-amber-900/50 text-amber-300"}`}>{r.severity}</span>}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {eiOpps.length > 0 && (
+                      <div className="rounded-lg border border-emerald-800/30 bg-emerald-950/20 p-3">
+                        <p className="text-[10px] font-medium uppercase tracking-wider text-emerald-400 mb-1">Opportunities</p>
+                        {eiOpps.map((o: any, i: number) => (
+                          <div key={i} className="mb-1 last:mb-0 text-[9px]">
+                            <span className="text-zinc-300">{o.opportunity}</span>
+                            {o.potential_savings > 0 && <span className="ml-1 text-emerald-400">${o.potential_savings?.toLocaleString()}</span>}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {eiRecs.length > 0 && (
+                      <div className="rounded-lg border border-purple-800/30 bg-purple-950/20 p-3">
+                        <p className="text-[10px] font-medium uppercase tracking-wider text-purple-400 mb-1">Recommendations</p>
+                        {eiRecs.map((r: any, i: number) => (
+                          <div key={i} className="mb-1 last:mb-0 text-[9px]">
+                            <span className="text-zinc-300">{r.action}</span>
+                            <span className="ml-1 text-zinc-500">{r.expected_roi}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <p className="text-sm text-zinc-600 text-center py-8">Run Enterprise Intelligence to analyze departments, processes, costs, workforce, supply chain, customers, and digital maturity.</p>
             )}
           </div>
         </div>

@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException
-from fastapi.responses import Response
+from pydantic import BaseModel
 
 from app.models.schemas import (
     AnalyticsRequest, IndustryDashboardResponse,
@@ -17,6 +17,32 @@ from app.services.board_report_service import generate_board_report
 from app.services.executive_briefing_service import generate_executive_briefing
 
 router = APIRouter(tags=["enterprise"])
+
+
+class EnterpriseRequest(BaseModel):
+    doc_id: int
+
+
+@router.post("/enterprise/intelligence")
+async def enterprise_intelligence(payload: EnterpriseRequest):
+    """Run full Enterprise Intelligence Engine across all domains."""
+    import numpy as np
+    from app.services.enterprise_intelligence_service import run_enterprise_intelligence
+
+    result = await run_enterprise_intelligence(payload.doc_id)
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
+
+    def _convert(obj):
+        if isinstance(obj, dict): return {k: _convert(v) for k, v in obj.items()}
+        elif isinstance(obj, list): return [_convert(v) for v in obj]
+        elif isinstance(obj, np.integer): return int(obj)
+        elif isinstance(obj, np.floating): return float(obj)
+        elif isinstance(obj, np.bool_): return bool(obj)
+        elif isinstance(obj, np.ndarray): return obj.tolist()
+        return obj
+
+    return _convert(result)
 
 
 @router.get("/analytics/industry-dashboard", response_model=IndustryDashboardResponse)
