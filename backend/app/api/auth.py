@@ -30,6 +30,17 @@ def get_user_id_from_token(authorization: str = Header("")) -> int:
     return int(payload["sub"])
 
 
+async def get_current_user_info(authorization: str = Header("")) -> dict:
+    """Return authenticated user info including org_id for multi-tenant scoping."""
+    if not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Invalid authorization header")
+    payload = decode_token(authorization[7:])
+    user = await get_current_user(int(payload["sub"]))
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"id": user.id, "organization_id": user.organization_id}
+
+
 @router.post("/register")
 async def register(payload: RegisterRequest):
     return await register_user(payload.email, payload.password, payload.full_name)

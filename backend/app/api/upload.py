@@ -14,6 +14,7 @@ from app.services.document_service import (
 from app.services.document_parser import allowed_file
 from app.services.document_processing_service import process_document, classify_file_type
 from app.services.rag_service import answer_question
+from app.api.auth import get_current_user_info
 
 logger = logging.getLogger(__name__)
 
@@ -24,29 +25,34 @@ ALLOWED_STR = ", ".join(sorted([".csv", ".docx", ".pdf", ".xlsx", ".txt"]))
 
 
 @router.post("/documents/", response_model=DocumentResponse)
-async def create(payload: DocumentCreate, db: AsyncSession = Depends(get_db)):
-    return await create_document(db, payload)
+async def create(payload: DocumentCreate, db: AsyncSession = Depends(get_db),
+                 user: dict = Depends(get_current_user_info)):
+    return await create_document(db, payload, org_id=user["organization_id"], user_id=user["id"])
 
 
 @router.get("/documents/", response_model=list[DocumentResponse])
-async def list_all(db: AsyncSession = Depends(get_db)):
-    return await list_documents(db)
+async def list_all(db: AsyncSession = Depends(get_db),
+                   user: dict = Depends(get_current_user_info)):
+    return await list_documents(db, org_id=user["organization_id"])
 
 
 @router.get("/documents/{doc_id}", response_model=DocumentResponse)
-async def get(doc_id: int, db: AsyncSession = Depends(get_db)):
-    return await get_document(db, doc_id)
+async def get(doc_id: int, db: AsyncSession = Depends(get_db),
+              user: dict = Depends(get_current_user_info)):
+    return await get_document(db, doc_id, org_id=user["organization_id"])
 
 
 @router.delete("/documents/{doc_id}")
-async def delete(doc_id: int, db: AsyncSession = Depends(get_db)):
-    await delete_document(db, doc_id)
+async def delete(doc_id: int, db: AsyncSession = Depends(get_db),
+                 user: dict = Depends(get_current_user_info)):
+    await delete_document(db, doc_id, org_id=user["organization_id"])
     return {"detail": "Document deleted"}
 
 
 @router.post("/documents/batch-delete")
-async def batch_delete(payload: BulkDeleteRequest, db: AsyncSession = Depends(get_db)):
-    deleted = await bulk_delete_documents(db, payload.doc_ids)
+async def batch_delete(payload: BulkDeleteRequest, db: AsyncSession = Depends(get_db),
+                       user: dict = Depends(get_current_user_info)):
+    deleted = await bulk_delete_documents(db, payload.doc_ids, org_id=user["organization_id"])
     return {"detail": f"{deleted} document(s) deleted", "deleted_count": deleted}
 
 
@@ -61,7 +67,8 @@ async def query(payload: QueryRequest):
 
 
 @router.post("/upload/", response_model=UploadResponse)
-async def upload_file(file: UploadFile = File(...)):
+async def upload_file(file: UploadFile = File(...),
+                      user: dict = Depends(get_current_user_info)):
     logger.info("Upload request received: filename=%s", file.filename)
 
     if not file.filename:
@@ -78,7 +85,7 @@ async def upload_file(file: UploadFile = File(...)):
     file_type = classify_file_type(file.filename)
     logger.info("File read: filename=%s type=%s size=%d bytes", file.filename, file_type, file_size)
 
-    doc_id = await process_document(content_bytes, file.filename)
+    doc_id = await process_document(content_bytes, file.filename, org_id=user["organization_id"], user_id=user["id"])
 
     return UploadResponse(
         filename=file.filename,

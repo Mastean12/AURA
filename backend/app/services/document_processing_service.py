@@ -13,7 +13,7 @@ from sqlalchemy import select
 logger = logging.getLogger(__name__)
 
 
-async def process_document(content_bytes: bytes, filename: str) -> int | None:
+async def process_document(content_bytes: bytes, filename: str, org_id: int | None = None, user_id: int | None = None) -> int | None:
     settings = get_settings()
     disk_path = save_upload(content_bytes, filename, settings.upload_dir)
 
@@ -33,6 +33,8 @@ async def process_document(content_bytes: bytes, filename: str) -> int | None:
             file_size=file_size,
             processing_status="processing",
             page_count=meta.get("page_count", 0),
+            organization_id=org_id,
+            uploaded_by=user_id,
         )
         db.add(doc)
         await db.commit()

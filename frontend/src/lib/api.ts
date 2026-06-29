@@ -140,7 +140,8 @@ export function uploadFileWithProgress(
 export async function listDocuments(): Promise<DocumentResponse[]> {
   const url = `${API_BASE}/documents/`;
   log("info", "GET", url);
-  const res = await fetch(url);
+  const res = await apiFetch(url);
+  if (!res.ok) return [];
   const data = await res.json();
   log("info", "Response", { status: res.status, count: Array.isArray(data) ? data.length : 0 });
   return data;
@@ -149,14 +150,14 @@ export async function listDocuments(): Promise<DocumentResponse[]> {
 export async function getDocument(id: number): Promise<DocumentResponse> {
   const url = `${API_BASE}/documents/${id}`;
   log("info", "GET", url);
-  const res = await fetch(url);
+  const res = await apiFetch(url);
   return res.json();
 }
 
 export async function deleteDocument(id: number): Promise<void> {
   const url = `${API_BASE}/documents/${id}`;
   log("info", "DELETE", url);
-  await fetch(url, { method: "DELETE" });
+  await apiFetch(url, { method: "DELETE" });
 }
 
 export async function getAnalytics(doc_id: number): Promise<AnalyticsResponse> {
